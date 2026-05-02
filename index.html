@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>แบบฟอร์มขอซื้อสินค้า (PR)</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: { 
+        extend: { 
+          colors: { 
+            brand: { 
+                blue: '#171C8F', 
+                blueLight: '#E8E9F4', 
+                orange: '#E35205'
+            } 
+          } 
+        } 
+      }
+    }
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    body { font-family: 'Prompt', sans-serif; background-color: #f8fafc; letter-spacing: 0.2px; }
+    .glass-card { background: white; border-radius: 16px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03); border: 1px solid #f1f5f9; }
+    .input-field { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid #e2e8f0; background: #f8fafc; margin-top: 4px; outline: none; transition: all 0.2s; font-size: 15px;}
+    .input-field:focus { border-color: #171C8F; box-shadow: 0 0 0 3px rgba(23, 28, 143, 0.15); background: white;}
+    .input-error { border-color: #ef4444 !important; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important; background-color: #fef2f2 !important; }
+    .btn { width: 100%; padding: 14px; border-radius: 12px; font-weight: 500; text-align: center; transition: all 0.2s; cursor: pointer; border: none; display: flex; justify-content: center; align-items: center; gap: 0.5rem; }
+    .btn-primary { background: #171C8F; color: white; }
+    .btn-primary:hover:not(:disabled) { background: #11146B; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(23, 28, 143, 0.2); }
+    .btn-primary:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    
+    .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 10000; display: flex; flex-direction: column; gap: 0.5rem; }
+    .toast { min-width: 250px; max-width: 350px; padding: 1rem; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); display: flex; align-items: flex-start; gap: 0.75rem; animation: slideInRight 0.3s cubic-bezier(0.4,0,0.2,1) forwards; background: white; border-left: 4px solid transparent; }
+    .toast.success { border-left-color: #10b981; } .toast.error { border-left-color: #ef4444; } .toast.warning { border-left-color: #f59e0b; }
+    .toast.closing { animation: slideOutRight 0.3s cubic-bezier(0.4,0,0.2,1) forwards; }
+    @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    @keyframes slideOutRight { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+    .loading-active { overflow: hidden; }
+  </style>
+</head>
+<body class="text-gray-800 antialiased h-screen flex flex-col leading-relaxed loading-active">
+
+  <!-- ==========================================
+       ส่วนของ Auth UI 
+       ========================================== -->
+  <div id="auth-loading" class="fixed inset-0 bg-white z-[9999] flex flex-col justify-center items-center">
+      <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#171C8F] mb-4"></div>
+      <p class="text-[#171C8F] font-medium text-lg">กำลังตรวจสอบสิทธิ์...</p>
+  </div>
+
+  <div id="auth-error" class="fixed inset-0 bg-white z-[9999] hidden flex flex-col justify-center items-center p-6 text-center">
+      <div class="bg-red-50 p-8 rounded-2xl max-w-md border border-red-100 shadow-lg">
+          <i data-lucide="shield-alert" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
+          <h2 class="text-xl font-bold text-gray-800 mb-2">ปฏิเสธการเข้าถึง</h2>
+          <p id="error-message" class="text-gray-600 mb-6">คุณไม่มีสิทธิ์เข้าใช้งานแอปพลิเคชันนี้</p>
+          <button onclick="window.location.href=APP_CONFIG.PORTAL_URL" class="px-6 py-2.5 bg-[#171C8F] text-white rounded-lg font-medium hover:bg-[#11146B] transition shadow-md">กลับไปหน้าหลัก (Portal)</button>
+      </div>
+  </div>
+
+  <!-- ==========================================
+       เนื้อหาแอปพลิเคชัน
+       ========================================== -->
+  <div id="app-content" class="hidden flex-1 flex flex-col h-screen w-full">
+      <nav class="bg-brand-blue text-white shadow-md sticky top-0 z-20">
+        <div class="max-w-3xl mx-auto px-4 sm:px-6">
+          <div class="flex justify-between items-center h-16">
+            <div class="flex-shrink-0 flex items-center">
+              <i data-lucide="file-text" class="w-6 h-6 mr-2"></i>
+              <h1 class="text-lg font-semibold tracking-wide">แบบฟอร์มขอซื้อสินค้า (PR)</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="text-sm font-medium text-white/90 hidden sm:block"><span id="display-username"></span></span>
+                <button id="logout-btn" class="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg text-sm transition">
+                    <i data-lucide="log-out" class="w-4 h-4"></i> ออกจากระบบ
+                </button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main class="flex-1 overflow-y-auto p-4 md:p-6 w-full max-w-3xl mx-auto pb-10">
+        
+        <div class="mb-6 text-center">
+            <h2 class="text-xl font-bold text-gray-800">ส่งคำขอสั่งซื้อสินค้า</h2>
+            <p class="text-sm text-gray-500 mt-1">ข้อมูลจะถูกส่งไปยังฝ่ายจัดซื้อเพื่อพิจารณาอนุมัติ</p>
+        </div>
+
+        <div class="glass-card p-5 md:p-8 relative">
+          <form id="form-pr" onsubmit="submitPR(event)" novalidate>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6 pb-6 border-b border-gray-100">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">ชื่อผู้ขอซื้อ <span class="text-red-500">*</span></label>
+                <input type="text" id="pr-requester" required class="input-field bg-gray-50 cursor-not-allowed" readonly>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1.5">สาขา / คลังสินค้าที่ต้องการ <span class="text-red-500">*</span></label>
+                <select id="pr-warehouse" required class="input-field text-brand-blue font-medium">
+                  <option value="" disabled selected>เลือกสาขา/คลังสินค้า...</option>
+                  <option value="W1">W1 (สีขาว)</option>
+                  <option value="W2">W2 (สีส้ม)</option>
+                  <option value="W3">W3 (สีเหลือง)</option>
+                  <option value="W4">W4 (สีเขียว)</option>
+                  <option value="W5">W5 (สีเทา)</option>
+                  <option value="C1">C1 (สีฟ้าอ่อน)</option>
+                  <option value="C2">C2 (สีฟ้าเข้ม)</option>
+                </select>
+              </div>
+            </div>
+            
+            <div class="mb-2 flex justify-between items-end">
+              <h3 class="text-base font-semibold text-gray-800">รายการสินค้าที่ต้องการ</h3>
+              <span class="text-xs font-medium text-brand-blue bg-brand-blueLight px-2.5 py-1 rounded-md border border-brand-blue/20" id="pr-total-items">1 รายการ</span>
+            </div>
+            
+            <div id="pr-items-container" class="space-y-4"></div>
+            
+            <button type="button" onclick="addEmptyItemRow()" class="mt-4 w-full border-2 border-dashed border-gray-300 text-gray-500 hover:text-brand-blue hover:border-brand-blue/50 hover:bg-brand-blueLight/50 py-3 rounded-xl text-sm font-medium transition flex items-center justify-center gap-1.5 active:scale-95">
+              <i data-lucide="plus-circle" class="w-5 h-5"></i> เพิ่มสินค้าอีก 1 รายการ
+            </button>
+
+            <div class="mt-8 pt-5 border-t border-gray-100">
+              <button type="submit" id="btn-submit-pr" class="btn btn-primary text-lg font-medium shadow-lg shadow-brand-blue/20 py-4">ส่งคำขอสั่งซื้อ (Submit PR)</button>
+            </div>
+          </form>
+        </div>
+
+      </main>
+  </div>
+
+  <div id="data-loader" class="fixed inset-0 bg-white/80 z-[9000] hidden flex-col justify-center items-center backdrop-blur-sm">
+      <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-[#171C8F] mb-4"></div>
+      <p class="text-brand-blue font-medium" id="data-loader-text">กำลังประมวลผล...</p>
+  </div>
+  <div id="toast-container" class="toast-container"></div>
+
+  <script>
+    const APP_CONFIG = {
+        API_URL: "https://script.google.com/macros/s/AKfycbxSomEq-O49vgID_6P-3XfoGuM86rM0dWPQS-ZMsFDvF-_N-O3EkaOS1Cdgg8nkxNfe/exec",
+        PORTAL_URL: "https://akra-web.github.io/PORTAL/", 
+        REQUIRED_ROLES: ["ADMIN", "AKRA", "WAREHOUSE", "PURCHASING", "USER"], // ให้ขอได้ทุกคน
+        APP_NAME: "แบบฟอร์มขอซื้อสินค้า (PR)",
+        STORAGE_KEY: "akra_pr_session"
+    };
+
+    const DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3NN7K_xfa80rE9bQOYFbRkjgBAbOm3ONYyfn7veuR1nK6lGTs3aJfbsWR8CYkySo/exec";
+    
+    let appData = { products: [] };
+
+    const UI = {
+        showLoading: () => {
+            document.body.classList.add('loading-active');
+            document.getElementById('auth-loading').classList.remove('hidden');
+            document.getElementById('auth-error').classList.add('hidden');
+            document.getElementById('app-content').classList.add('hidden');
+        },
+        showError: (message) => {
+            document.body.classList.remove('loading-active');
+            document.getElementById('auth-loading').classList.add('hidden');
+            const errorSection = document.getElementById('auth-error');
+            errorSection.classList.remove('hidden');
+            document.getElementById('error-message').innerText = message;
+        },
+        showApp: (username) => {
+            document.body.classList.remove('loading-active');
+            document.getElementById('auth-loading').classList.add('hidden');
+            document.getElementById('app-content').classList.remove('hidden');
+            document.getElementById('display-username').innerText = username;
+            
+            // Auto fill username for PR
+            document.getElementById('pr-requester').value = username;
+        }
+    };
+
+    const AuthGuard = {
+        init: async () => {
+            lucide.createIcons();
+            UI.showLoading();
+
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                let requestedUser = urlParams.get('user');
+
+                if (requestedUser) {
+                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, requestedUser);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                } else {
+                    requestedUser = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
+                }
+
+                if (!requestedUser) {
+                    window.location.href = APP_CONFIG.PORTAL_URL;
+                    return;
+                }
+
+                const response = await fetch(`${APP_CONFIG.API_URL}?action=getUsers`);
+                if (!response.ok) throw new Error("API_ERROR");
+                const dbUsers = await response.json();
+
+                let matchedUser = null;
+                for (const id in dbUsers) {
+                    if (dbUsers[id].name === requestedUser) {
+                        matchedUser = dbUsers[id];
+                        break;
+                    }
+                }
+
+                if (!matchedUser) {
+                    UI.showError("ข้อมูลผู้ใช้ไม่ถูกต้อง หรือถูกลบออกจากระบบ");
+                    localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+                    return;
+                }
+
+                const userRoles = Array.isArray(matchedUser.roles) ? matchedUser.roles : [matchedUser.roles];
+                const hasPermission = userRoles.some(role => APP_CONFIG.REQUIRED_ROLES.includes(role));
+
+                if (hasPermission) {
+                    window.currentUser = matchedUser.name;
+                    UI.showApp(matchedUser.name);
+                    AuthGuard.bindEvents();
+                    
+                    // หลังจากตรวจสอบสิทธิ์ผ่านแล้ว จึงโหลดข้อมูล
+                    await loadInitialData();
+                } else {
+                    UI.showError("คุณไม่มีสิทธิ์ระดับ " + APP_CONFIG.REQUIRED_ROLES.join(', ') + " ในการเข้าถึงแอปพลิเคชันนี้");
+                    localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+                }
+
+            } catch (error) {
+                console.error("Auth Error:", error);
+                UI.showError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบสิทธิ์ได้");
+            }
+        },
+
+        bindEvents: () => {
+            const logoutBtn = document.getElementById('logout-btn');
+            if(logoutBtn) {
+                logoutBtn.addEventListener('click', () => {
+                    localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+                    window.location.href = APP_CONFIG.PORTAL_URL;
+                });
+            }
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', AuthGuard.init);
+
+    function showDataLoading(text = 'กำลังโหลด...') {
+        document.getElementById('data-loader-text').innerText = text;
+        document.getElementById('data-loader').classList.remove('hidden');
+        document.getElementById('data-loader').classList.add('flex');
+    }
+    function hideDataLoading() {
+        document.getElementById('data-loader').classList.add('hidden');
+        document.getElementById('data-loader').classList.remove('flex');
+    }
+    function showNotification(msg, type='success') {
+        const c = document.getElementById('toast-container');
+        if(!c) return;
+        const t = document.createElement('div');
+        t.className = `toast ${type}`;
+        
+        let icon = '';
+        if(type === 'success') icon = `<i data-lucide="check-circle" class="w-6 h-6 text-emerald-500 flex-shrink-0"></i>`;
+        else if(type === 'warning') icon = `<i data-lucide="alert-triangle" class="w-6 h-6 text-yellow-500 flex-shrink-0"></i>`;
+        else icon = `<i data-lucide="x-circle" class="w-6 h-6 text-red-500 flex-shrink-0"></i>`;
+
+        t.innerHTML = `${icon}<div class="flex-1"><p class="text-sm font-medium text-gray-800">${msg}</p></div>`;
+        c.appendChild(t);
+        lucide.createIcons();
+        setTimeout(() => { t.classList.add('closing'); t.addEventListener('animationend', () => t.remove()); }, 4000);
+    }
+
+    async function apiCall(action, payload = null) {
+      if (!navigator.onLine) return { success: false, message: 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต' };
+      try {
+        const res = await fetch(DATA_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, data: payload }) });
+        return await res.json();
+      } catch (error) { return { success: false, message: 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้' }; }
+    }
+
+    async function loadInitialData() {
+        showDataLoading('เตรียมความพร้อมระบบ...');
+        const response = await apiCall('getInitialData');
+        hideDataLoading();
+        if (response.success) {
+            appData.products = response.products || [];
+            const savedWarehouse = localStorage.getItem('pr_warehouse_pref');
+            if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
+            addEmptyItemRow();
+        } else {
+            showNotification('ไม่สามารถโหลดรายชื่อสินค้าได้ (พิมพ์ชื่อสินค้าเองได้)', 'warning');
+            addEmptyItemRow();
+        }
+    }
+
+    function updateTotalItemsCount() {
+        const count = document.getElementById('pr-items-container').children.length;
+        document.getElementById('pr-total-items').innerText = `${count} รายการ`;
+    }
+
+    function addEmptyItemRow() {
+        const container = document.getElementById('pr-items-container');
+        const div = document.createElement('div');
+        div.className = "item-row bg-gray-50/50 p-4 rounded-xl border border-gray-100 relative";
+        div.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                <div class="md:col-span-6 relative">
+                    <label class="block text-xs font-medium text-gray-500 mb-1">ชื่อสินค้า (Product)</label>
+                    <input type="text" class="input-field p-product-input m-0 py-2.5 bg-white font-medium" placeholder="พิมพ์ชื่อสินค้า..." autocomplete="off">
+                    <ul class="suggestion-box absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto hidden mt-1 divide-y divide-gray-50"></ul>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-6 md:col-span-6 gap-4">
+                    <div class="col-span-1 md:col-span-2">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">จำนวน</label>
+                        <input type="number" class="input-field p-qty-input m-0 py-2.5 bg-white text-brand-blue font-semibold" placeholder="ระบุเลข" min="1">
+                    </div>
+                    <div class="col-span-1 md:col-span-4">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">เหตุผล/หมายเหตุ (ถ้ามี)</label>
+                        <input type="text" class="input-field p-remark-input m-0 py-2.5 bg-white text-gray-600" placeholder="เช่น ของหมด, ด่วนมาก">
+                    </div>
+                </div>
+            </div>
+            <button type="button" onclick="removeRow(this)" class="absolute -top-2 -right-2 bg-white text-gray-400 hover:text-red-500 border border-gray-200 shadow-sm p-1.5 rounded-full transition" title="ลบรายการนี้">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        `;
+        container.appendChild(div);
+        setupProductAutocomplete(div.querySelector('.p-product-input'));
+        updateTotalItemsCount();
+        lucide.createIcons();
+    }
+
+    function removeRow(btn) {
+        const container = document.getElementById('pr-items-container');
+        if (container.children.length <= 1) { showNotification("ต้องมีรายการสินค้าอย่างน้อย 1 รายการ", 'warning'); return; }
+        btn.closest('.item-row').remove();
+        updateTotalItemsCount();
+    }
+
+    function setupProductAutocomplete(inputEl) {
+        const suggestionBox = inputEl.nextElementSibling;
+        inputEl.addEventListener('input', function() {
+            const val = this.value.trim().toLowerCase();
+            suggestionBox.innerHTML = '';
+            if (!val || appData.products.length === 0) { suggestionBox.classList.add('hidden'); return; }
+            
+            const normalizedProducts = appData.products.map(p => typeof p === 'string' ? {name: p, unit: ''} : p);
+            const filtered = normalizedProducts.filter(p => p.name.toLowerCase().includes(val)).slice(0, 20);
+            if (filtered.length === 0) { suggestionBox.classList.add('hidden'); return; }
+            
+            const frag = document.createDocumentFragment();
+            filtered.forEach(p => {
+                const li = document.createElement('li');
+                li.className = 'px-3 py-2.5 hover:bg-brand-blueLight active:bg-brand-blue/10 cursor-pointer text-sm font-medium text-gray-700 transition flex justify-between items-start gap-2';
+                const unitBadge = p.unit ? `<span class="text-[10px] text-brand-blue bg-brand-blueLight px-1.5 py-0.5 rounded border border-brand-blue/20 whitespace-nowrap mt-0.5">${p.unit}</span>` : '';
+                li.innerHTML = `<span class="leading-tight break-words">${p.name}</span> ${unitBadge}`;
+                
+                li.onmousedown = function(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    inputEl.value = p.name;
+                    const row = inputEl.closest('.item-row');
+                    if(row.querySelector('.p-qty-input')) row.querySelector('.p-qty-input').focus();
+                    suggestionBox.classList.add('hidden');
+                };
+                frag.appendChild(li);
+            });
+            suggestionBox.appendChild(frag);
+            suggestionBox.classList.remove('hidden');
+        });
+        inputEl.addEventListener('blur', function() { setTimeout(() => { suggestionBox.classList.add('hidden'); }, 200); });
+        inputEl.addEventListener('focus', function() { if (this.value && suggestionBox.children.length > 0) suggestionBox.classList.remove('hidden'); });
+    }
+
+    async function submitPR(e) {
+        e.preventDefault();
+        
+        const requesterInput = document.getElementById('pr-requester');
+        const warehouseInput = document.getElementById('pr-warehouse');
+        const requester = requesterInput.value.trim();
+        const warehouse = warehouseInput.value;
+
+        requesterInput.classList.remove('input-error');
+        warehouseInput.classList.remove('input-error');
+
+        if(!requester) { requesterInput.classList.add('input-error'); return showNotification("กรุณาระบุชื่อผู้ขอซื้อ", "warning"); }
+        if(!warehouse) { warehouseInput.classList.add('input-error'); return showNotification("กรุณาเลือกสาขา/คลังสินค้า", "warning"); }
+
+        localStorage.setItem('pr_warehouse_pref', warehouse);
+
+        const rows = document.querySelectorAll('#pr-items-container .item-row');
+        const itemsToSubmit = [];
+        let hasError = false;
+
+        rows.forEach((row, idx) => {
+            const prodInput = row.querySelector('.p-product-input');
+            const qtyInput = row.querySelector('.p-qty-input');
+            prodInput.classList.remove('input-error');
+            qtyInput.classList.remove('input-error');
+
+            const product = prodInput.value.trim();
+            const quantity = qtyInput.value.trim();
+            const remark = row.querySelector('.p-remark-input').value.trim();
+
+            if(product && quantity) {
+                itemsToSubmit.push({ product, quantity, remark });
+            } else if (product || quantity) {
+                if(!product) prodInput.classList.add('input-error');
+                if(!quantity) qtyInput.classList.add('input-error');
+                showNotification(`รายการที่ ${idx+1} ข้อมูลไม่ครบถ้วน`, "warning");
+                hasError = true;
+            }
+        });
+
+        if(hasError) return;
+        if(itemsToSubmit.length === 0) return showNotification("กรุณาระบุสินค้าที่ต้องการอย่างน้อย 1 รายการ", "warning");
+
+        const btn = document.getElementById('btn-submit-pr');
+        btn.disabled = true;
+        showDataLoading('กำลังส่งคำขอสั่งซื้อ...');
+
+        const payload = { requester, warehouse, items: itemsToSubmit };
+        const res = await apiCall('createPR', payload);
+
+        btn.disabled = false;
+        hideDataLoading();
+
+        if(res.success) {
+            showNotification('ส่งคำขอสั่งซื้อเรียบร้อยแล้ว!', 'success');
+            document.getElementById('pr-items-container').innerHTML = '';
+            addEmptyItemRow();
+            window.scrollTo(0, 0);
+        } else {
+            showNotification('เกิดข้อผิดพลาด: ' + (res.message || res.error), 'error');
+        }
+    }
+  </script>
+</body>
+</html>
