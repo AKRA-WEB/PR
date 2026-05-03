@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <link rel="preconnect" href="https://script.google.com">
   <title>ระบบจัดซื้อ & APV</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
@@ -10,18 +11,7 @@
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
     tailwind.config = {
-      theme: { 
-        extend: { 
-          colors: { 
-            brand: { 
-                blue: '#171C8F',      // Imperial Blue (CI)
-                blueLight: '#e0e7ff', 
-                orange: '#E35205',    // Burnt Orange (CI)
-                orangeLight: '#FCECE5'
-            } 
-          } 
-        } 
-      }
+      theme: { extend: { colors: { brand: { blue: '#171C8F', blueLight: '#e0e7ff', orange: '#E35205', orangeLight: '#FCECE5'} } } }
     }
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -40,12 +30,9 @@
     .btn-create:hover:not(:disabled) { background: #11146B; }
     .btn-create:disabled { opacity: 0.6; cursor: not-allowed; }
     .btn-outline-action { border: 1px solid #e2e8f0; color: #64748b; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s; cursor: pointer; background: transparent;}
-    .btn-success { color: #059669; border-color: #a7f3d0; background: #ecfdf5; }
-    .btn-success:hover { background: #d1fae5; }
-    .btn-edit { color: #d97706; border-color: #fde68a; background: #fffbeb; }
-    .btn-edit:hover { background: #fef3c7; }
-    .btn-delete { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
-    .btn-delete:hover { background: #fee2e2; }
+    .btn-success { color: #059669; border-color: #a7f3d0; background: #ecfdf5; } .btn-success:hover { background: #d1fae5; }
+    .btn-edit { color: #d97706; border-color: #fde68a; background: #fffbeb; } .btn-edit:hover { background: #fef3c7; }
+    .btn-delete { color: #dc2626; border-color: #fecaca; background: #fef2f2; } .btn-delete:hover { background: #fee2e2; }
 
     .toast-container { position: fixed; top: 1rem; right: 1rem; z-index: 10000; display: flex; flex-direction: column; gap: 0.5rem; }
     .toast { min-width: 250px; max-width: 350px; padding: 1rem; border-radius: 0.75rem; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); display: flex; align-items: flex-start; gap: 0.75rem; animation: slideInRight 0.3s cubic-bezier(0.4,0,0.2,1) forwards; background: white; border-left: 4px solid transparent; }
@@ -59,9 +46,7 @@
 </head>
 <body class="text-gray-800 antialiased h-screen flex flex-col loading-active">
 
-  <!-- ==========================================
-       ส่วนของ Auth UI 
-       ========================================== -->
+  <!-- Auth UI -->
   <div id="auth-loading" class="fixed inset-0 bg-white z-[9999] flex flex-col justify-center items-center">
       <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#171C8F] mb-4"></div>
       <p class="text-[#171C8F] font-medium text-lg">กำลังตรวจสอบสิทธิ์...</p>
@@ -76,9 +61,7 @@
       </div>
   </div>
 
-  <!-- ==========================================
-       เนื้อหาแอปพลิเคชัน (ซ่อนไว้จนกว่าจะยืนยันสิทธิ์)
-       ========================================== -->
+  <!-- App Content -->
   <div id="app-content" class="hidden flex-1 flex flex-col h-screen w-full">
       <nav class="bg-brand-blue text-white shadow-md sticky top-0 z-20">
         <div class="max-w-7xl mx-auto px-4 sm:px-6">
@@ -104,7 +87,6 @@
 
       <main class="flex-1 overflow-y-auto w-full max-w-7xl mx-auto bg-[#f8fafc]">
         
-        <!-- Tab Navigation Bar -->
         <div class="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
             <div class="flex overflow-x-auto hide-scroll px-4 sm:px-6">
                 <button onclick="switchTab('tab-pr')" id="btn-tab-pr" class="tab-btn active">
@@ -273,11 +255,7 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    // -------------------------------------------------------------------------
-    // แก้ไข Syntax Error: ใช้ var แทน let/const ในระดับ Global เพื่อป้องกันการชนกันเวลาโหลดซ้ำ
-    // -------------------------------------------------------------------------
     var APP_CONFIG = {
-        // !!! ต้องเป็น API URL ของระบบ Main Menu เท่านั้น !!! เพื่อให้ตรวจสอบ Token SSO ได้
         API_URL: "https://script.google.com/macros/s/AKfycbwv2oGqYocA-k-EN2qjs_rf64gc9kDCG2o2nIKlAW0BDCT0rXLvcgLurCRaQXjuC-OG/exec",
         PORTAL_URL: "https://akra-web.github.io/Main/", 
         REQUIRED_ROLES: ["ADMIN", "AKRA", "PURCHASING"], 
@@ -285,47 +263,26 @@
         STORAGE_KEY: "akra_po_session_token"
     };
 
-    // Data API (คนละตัวกับ Auth API)
     var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwA1Z2MS6ac_sNrXz3jpX1iHkBj3nY04kcWZdOxgkCGr8sklLgWyLAuq2Ib6wx7x_w/exec";
     
-    // เปลี่ยน let เป็น var ป้องกัน SyntaxError: Identifier has already been declared
     var appData = { prList: [], pendingPOs: [], grCompleted: [], apvList: [], vendors: [], products: [] };
     var groupedPOs = [];
     var groupedMatchData = {};
-    var groupedAPVData = {}; // ประกาศเพิ่มเพื่อป้องกันตัวแปรลอย (Implicit Global)
+    var groupedAPVData = {}; 
     var isVendorEventsAttached = false; 
     var confirmCallback = null;
 
     var UI = {
-        showLoading: () => {
-            document.body.classList.add('loading-active');
-            document.getElementById('auth-loading').classList.remove('hidden');
-            document.getElementById('auth-error').classList.add('hidden');
-            document.getElementById('app-content').classList.add('hidden');
-        },
-        showError: (message) => {
-            document.body.classList.remove('loading-active');
-            document.getElementById('auth-loading').classList.add('hidden');
-            const errorSection = document.getElementById('auth-error');
-            errorSection.classList.remove('hidden');
-            document.getElementById('error-message').innerText = message;
-        },
-        showApp: (username) => {
-            document.body.classList.remove('loading-active');
-            document.getElementById('auth-loading').classList.add('hidden');
-            document.getElementById('app-content').classList.remove('hidden');
-            document.getElementById('display-username').innerText = username;
-        }
+        showLoading: () => { document.body.classList.add('loading-active'); document.getElementById('auth-loading').classList.remove('hidden'); document.getElementById('auth-error').classList.add('hidden'); document.getElementById('app-content').classList.add('hidden'); },
+        showError: (message) => { document.body.classList.remove('loading-active'); document.getElementById('auth-loading').classList.add('hidden'); const errorSection = document.getElementById('auth-error'); errorSection.classList.remove('hidden'); document.getElementById('error-message').innerText = message; },
+        showApp: (username) => { document.body.classList.remove('loading-active'); document.getElementById('auth-loading').classList.add('hidden'); document.getElementById('app-content').classList.remove('hidden'); document.getElementById('display-username').innerText = username; }
     };
 
-    // อัปเดต AuthGuard ให้รองรับการตรวจสอบ Token จาก Portal (SSO)
     var AuthGuard = {
         init: async () => {
             lucide.createIcons();
             UI.showLoading();
-
             try {
-                // 1. ดึง Token จาก URL หรือจาก Local Storage
                 const urlParams = new URLSearchParams(window.location.search);
                 const ssoToken = urlParams.get('sso'); 
                 let savedToken = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
@@ -334,15 +291,14 @@
                 const isPreviewEnv = window.self !== window.top || window.location.hostname === "" || window.location.hostname === "localhost" || window.location.hostname.includes("googleusercontent");
 
                 if (ssoToken) {
-                    tokenToVerify = ssoToken;
+                    const fixedSsoToken = ssoToken.replace(/ /g, '+');
+                    tokenToVerify = fixedSsoToken;
                     window.history.replaceState({}, document.title, window.location.pathname);
                 } else if (savedToken) {
                     tokenToVerify = savedToken;
                 }
 
-                // 2. Bypass สำหรับโหมดทดสอบ
                 if (!tokenToVerify && isPreviewEnv) {
-                    console.log("เข้าสู่โหมดทดสอบ (Preview Mode)");
                     window.currentUser = "โหมดทดสอบ (Preview)";
                     UI.showApp(window.currentUser);
                     AuthGuard.bindEvents();
@@ -350,158 +306,79 @@
                     return; 
                 }
 
-                if (!tokenToVerify) {
-                    window.location.href = APP_CONFIG.PORTAL_URL;
-                    return;
-                }
+                if (!tokenToVerify) { window.location.href = APP_CONFIG.PORTAL_URL; return; }
 
-                // 3. ยิง Token ไปถามเซิร์ฟเวอร์หลัก
                 const rolesParam = APP_CONFIG.REQUIRED_ROLES.join(',');
                 const verifyUrl = `${APP_CONFIG.API_URL}?action=verifyToken&token=${encodeURIComponent(tokenToVerify)}&roles=${encodeURIComponent(rolesParam)}`;
 
                 const response = await fetch(verifyUrl);
                 if (!response.ok) throw new Error("API_ERROR");
-                
                 const data = await response.json();
 
                 if (data.valid) {
                     localStorage.setItem(APP_CONFIG.STORAGE_KEY, tokenToVerify);
                     window.currentUser = data.user.name;
-                    
                     UI.showApp(data.user.name);
                     AuthGuard.bindEvents();
                     await loadInitialData();
                 } else {
                     let errorMsg = "เซสชันหมดอายุ หรือเซิร์ฟเวอร์ปฏิเสธการเชื่อมต่อ";
-                    if (data.reason === 'permission_denied') {
-                        errorMsg = `คุณไม่มีสิทธิ์ระดับ [${APP_CONFIG.REQUIRED_ROLES.join(', ')}] ในการเข้าถึงแอปพลิเคชันนี้`;
-                    } else if (data.reason === 'invalid_or_expired_token') {
-                        errorMsg = "ข้อมูลการเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบใหม่ผ่าน Portal";
-                    }
+                    if (data.reason === 'permission_denied') errorMsg = `คุณไม่มีสิทธิ์ระดับ [${APP_CONFIG.REQUIRED_ROLES.join(', ')}] ในการเข้าถึงแอปพลิเคชันนี้`;
+                    else if (data.reason === 'invalid_or_expired_token') errorMsg = "ข้อมูลการเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบใหม่ผ่าน Portal";
                     
                     UI.showError(errorMsg);
                     localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
                 }
-
             } catch (error) {
                 console.error("Auth Error:", error);
                 const isPreviewEnv = window.self !== window.top || window.location.hostname === "";
-                if (isPreviewEnv) {
-                    window.currentUser = "โหมดทดสอบ (API Error)";
-                    UI.showApp(window.currentUser);
-                    AuthGuard.bindEvents();
-                    await loadInitialData();
-                } else {
-                    UI.showError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบสิทธิ์ได้");
-                }
+                if (isPreviewEnv) { window.currentUser = "โหมดทดสอบ (API Error)"; UI.showApp(window.currentUser); AuthGuard.bindEvents(); await loadInitialData(); } 
+                else { UI.showError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบสิทธิ์ได้"); }
             }
         },
-
         bindEvents: () => {
             const logoutBtn = document.getElementById('logout-btn');
-            if(logoutBtn) {
-                logoutBtn.addEventListener('click', () => {
-                    localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
-                    window.location.href = APP_CONFIG.PORTAL_URL;
-                });
-            }
+            if(logoutBtn) { logoutBtn.addEventListener('click', () => { localStorage.removeItem(APP_CONFIG.STORAGE_KEY); window.location.href = APP_CONFIG.PORTAL_URL; }); }
         }
     };
-
     document.addEventListener('DOMContentLoaded', AuthGuard.init);
 
-    // --- Custom UI Tools ---
-    function showDataLoading(text = 'กำลังโหลด...') {
-        document.getElementById('data-loader-text').innerText = text;
-        document.getElementById('data-loader').classList.remove('hidden');
-        document.getElementById('data-loader').classList.add('flex');
-    }
-    function hideDataLoading() {
-        document.getElementById('data-loader').classList.add('hidden');
-        document.getElementById('data-loader').classList.remove('flex');
-    }
+    function showDataLoading(text = 'กำลังโหลด...') { document.getElementById('data-loader-text').innerText = text; document.getElementById('data-loader').classList.remove('hidden'); document.getElementById('data-loader').classList.add('flex'); }
+    function hideDataLoading() { document.getElementById('data-loader').classList.add('hidden'); document.getElementById('data-loader').classList.remove('flex'); }
     function showNotification(msg, type='success') {
-        const c = document.getElementById('toast-container');
-        if(!c) return;
-        const t = document.createElement('div');
-        t.className = `toast ${type}`;
-        
-        let icon = '';
-        if(type === 'success') icon = `<i data-lucide="check-circle" class="w-6 h-6 text-emerald-500 flex-shrink-0"></i>`;
-        else if(type === 'warning') icon = `<i data-lucide="alert-triangle" class="w-6 h-6 text-yellow-500 flex-shrink-0"></i>`;
-        else icon = `<i data-lucide="x-circle" class="w-6 h-6 text-red-500 flex-shrink-0"></i>`;
-
+        const c = document.getElementById('toast-container'); if(!c) return;
+        const t = document.createElement('div'); t.className = `toast ${type}`;
+        let icon = type === 'success' ? `<i data-lucide="check-circle" class="w-6 h-6 text-emerald-500 flex-shrink-0"></i>` : (type === 'warning' ? `<i data-lucide="alert-triangle" class="w-6 h-6 text-yellow-500 flex-shrink-0"></i>` : `<i data-lucide="x-circle" class="w-6 h-6 text-red-500 flex-shrink-0"></i>`);
         t.innerHTML = `${icon}<div class="flex-1"><p class="text-sm font-medium text-gray-800">${msg}</p></div>`;
-        c.appendChild(t);
-        lucide.createIcons();
+        c.appendChild(t); lucide.createIcons({root: t});
         setTimeout(() => { t.classList.add('closing'); t.addEventListener('animationend', () => t.remove()); }, 4000);
     }
     
-    function showConfirmModal(message, callback) {
-        document.getElementById('confirm-message').innerText = message;
-        confirmCallback = callback;
-        const m = document.getElementById('custom-confirm-modal');
-        m.classList.remove('hidden'); m.classList.add('flex');
-    }
-    function closeConfirmModal() {
-        const m = document.getElementById('custom-confirm-modal');
-        m.classList.add('hidden'); m.classList.remove('flex');
-        confirmCallback = null;
-    }
-    document.getElementById('btn-confirm-action')?.addEventListener('click', () => {
-        if(confirmCallback) confirmCallback();
-        closeConfirmModal();
-    });
+    function showConfirmModal(message, callback) { document.getElementById('confirm-message').innerText = message; confirmCallback = callback; const m = document.getElementById('custom-confirm-modal'); m.classList.remove('hidden'); m.classList.add('flex'); }
+    function closeConfirmModal() { const m = document.getElementById('custom-confirm-modal'); m.classList.add('hidden'); m.classList.remove('flex'); confirmCallback = null; }
+    document.getElementById('btn-confirm-action')?.addEventListener('click', () => { if(confirmCallback) confirmCallback(); closeConfirmModal(); });
 
-    // --- Core Logics ---
-    function switchTab(tabId) {
-        document.querySelectorAll('main > div > section').forEach(s => s.classList.add('hidden'));
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById(tabId).classList.remove('hidden');
-        document.getElementById(`btn-${tabId}`).classList.add('active');
-    }
+    function switchTab(tabId) { document.querySelectorAll('main > div > section').forEach(s => s.classList.add('hidden')); document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active')); document.getElementById(tabId).classList.remove('hidden'); document.getElementById(`btn-${tabId}`).classList.add('active'); }
 
     async function apiAction(action, payload) {
         showDataLoading('กำลังประมวลผล...');
         try {
-            const res = await fetch(DATA_SCRIPT_URL, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action, data: payload }) 
-            });
+            const res = await fetch(DATA_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, data: payload }) });
             const result = await res.json();
-            if(result.success) {
-                await loadInitialData(); 
-                showNotification(result.message || 'ดำเนินการสำเร็จ', 'success');
-            } else { 
-                showNotification('เกิดข้อผิดพลาด: ' + result.message, 'error'); 
-            }
-        } catch(e) { 
-            console.warn('API Error:', e);
-            showNotification('การเชื่อมต่อกับเซิร์ฟเวอร์ล้มเหลว', 'error');
-        }
+            if(result.success) { await loadInitialData(); showNotification(result.message || 'ดำเนินการสำเร็จ', 'success'); } 
+            else { showNotification('เกิดข้อผิดพลาด: ' + result.message, 'error'); }
+        } catch(e) { showNotification('การเชื่อมต่อกับเซิร์ฟเวอร์ล้มเหลว', 'error'); }
         hideDataLoading();
     }
 
     async function loadInitialData() {
         showDataLoading('กำลังโหลดข้อมูล...');
         try {
-            const res = await fetch(DATA_SCRIPT_URL, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: 'getInitialData' }) 
-            });
+            const res = await fetch(DATA_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'getInitialData' }) });
             const result = await res.json();
-            if(result.success) {
-                appData = result;
-                processDataAndRender();
-            } else { 
-                showNotification('โหลดข้อมูลล้มเหลว: ' + result.message, 'error'); 
-            }
-        } catch(e) { 
-            console.warn('Load Data Error:', e);
-            showNotification('ไม่สามารถดึงข้อมูลจากระบบได้', 'error');
-        }
+            if(result.success) { appData = result; processDataAndRender(); } 
+            else { showNotification('โหลดข้อมูลล้มเหลว: ' + result.message, 'error'); }
+        } catch(e) { showNotification('ไม่สามารถดึงข้อมูลจากระบบได้', 'error'); }
         hideDataLoading();
     }
 
@@ -509,53 +386,34 @@
         document.getElementById('badge-pr').innerText = appData.prList.length;
         document.getElementById('badge-po').innerText = appData.pendingPOs.length;
         
-        groupPOData();
-        groupGRData();
-        groupAPVData();
+        groupPOData(); groupGRData(); groupAPVData();
         
         document.getElementById('badge-match').innerText = Object.keys(groupedMatchData).length;
         document.getElementById('badge-apv').innerText = Object.keys(groupedAPVData).length;
 
-        renderTab1_PR();
-        renderTab2_PO();
-        renderTab3_Match();
-        renderTab4_APV();
-        
+        renderTab1_PR(); renderTab2_PO(); renderTab3_Match(); renderTab4_APV();
         setupVendorAutocomplete();
-        lucide.createIcons();
     }
 
-    // =========================================================================
-    // Vendor SmartSearch (Autocomplete)
-    // =========================================================================
+    // --- Autocomplete ---
     function setupVendorAutocomplete() {
         if(isVendorEventsAttached) return;
-        const vendorInput = document.getElementById('create-po-vendor');
-        const vendorSuggestionBox = document.getElementById('vendor-suggestions');
+        const vendorInput = document.getElementById('create-po-vendor'); const vendorSuggestionBox = document.getElementById('vendor-suggestions');
         if(!vendorInput || !vendorSuggestionBox) return;
 
         vendorInput.addEventListener('input', function() {
-            const val = this.value.trim().toLowerCase();
-            vendorSuggestionBox.innerHTML = '';
+            const val = this.value.trim().toLowerCase(); vendorSuggestionBox.innerHTML = '';
             if (!val || !appData.vendors || appData.vendors.length === 0) { vendorSuggestionBox.classList.add('hidden'); return; }
-
             const filtered = appData.vendors.filter(v => v.toLowerCase().includes(val)).slice(0, 15);
             if (filtered.length === 0) { vendorSuggestionBox.classList.add('hidden'); return; }
 
             filtered.forEach(v => {
-                const li = document.createElement('li');
-                li.className = 'px-3 py-2.5 hover:bg-brand-blueLight/50 cursor-pointer text-sm font-medium text-gray-700';
-                li.textContent = v;
-                li.onmousedown = function(e) {
-                    e.preventDefault();
-                    vendorInput.value = v;
-                    vendorSuggestionBox.classList.add('hidden');
-                };
+                const li = document.createElement('li'); li.className = 'px-3 py-2.5 hover:bg-brand-blueLight/50 cursor-pointer text-sm font-medium text-gray-700'; li.textContent = v;
+                li.onmousedown = function(e) { e.preventDefault(); vendorInput.value = v; vendorSuggestionBox.classList.add('hidden'); };
                 vendorSuggestionBox.appendChild(li);
             });
             vendorSuggestionBox.classList.remove('hidden');
         });
-
         vendorInput.addEventListener('blur', () => setTimeout(() => vendorSuggestionBox.classList.add('hidden'), 200));
         vendorInput.addEventListener('focus', function() { if (this.value && vendorSuggestionBox.children.length > 0) vendorSuggestionBox.classList.remove('hidden'); });
         isVendorEventsAttached = true;
@@ -564,23 +422,18 @@
     function setupProductAutocompleteForPO(inputEl) {
         const suggestionBox = inputEl.nextElementSibling;
         inputEl.addEventListener('input', function() {
-            const val = this.value.trim().toLowerCase();
-            suggestionBox.innerHTML = '';
+            const val = this.value.trim().toLowerCase(); suggestionBox.innerHTML = '';
             if (!val || !appData.products || appData.products.length === 0) { suggestionBox.classList.add('hidden'); return; }
-            
             const filtered = appData.products.filter(p => p.name.toLowerCase().includes(val)).slice(0, 15);
             if (filtered.length === 0) { suggestionBox.classList.add('hidden'); return; }
             
             filtered.forEach(p => {
-                const li = document.createElement('li');
-                li.className = 'px-3 py-2.5 hover:bg-brand-blueLight/50 cursor-pointer text-sm font-medium text-gray-700 flex justify-between items-center';
+                const li = document.createElement('li'); li.className = 'px-3 py-2.5 hover:bg-brand-blueLight/50 cursor-pointer text-sm font-medium text-gray-700 flex justify-between items-center';
                 li.innerHTML = `<span>${p.name}</span> <span class="text-[10px] text-gray-400 truncate max-w-[120px]">${p.vendor || ''}</span>`;
                 li.onmousedown = function(e) {
-                    e.preventDefault(); 
-                    inputEl.value = p.name;
+                    e.preventDefault(); inputEl.value = p.name;
                     if (p.vendor) { document.getElementById('create-po-vendor').value = p.vendor; }
-                    const row = inputEl.closest('.create-po-item-row');
-                    row.querySelector('.c-qty').focus();
+                    inputEl.closest('.create-po-item-row').querySelector('.c-qty').focus();
                     suggestionBox.classList.add('hidden');
                 };
                 suggestionBox.appendChild(li);
@@ -591,39 +444,36 @@
         inputEl.addEventListener('focus', function() { if (this.value && suggestionBox.children.length > 0) suggestionBox.classList.remove('hidden'); });
     }
 
-    // =========================================================================
-    // TAB 1: PR 
-    // =========================================================================
+    // --- TAB 1: PR ---
     function renderTab1_PR() {
         const container = document.getElementById('pr-container');
-        container.innerHTML = '';
-        if(!appData.prList || appData.prList.length === 0) { 
-            container.innerHTML = '<p class="col-span-full text-gray-500 text-center py-10 bg-white rounded-xl border border-dashed">ไม่มีคำขอซื้อใหม่</p>'; 
-            return; 
-        }
+        if(!appData.prList || appData.prList.length === 0) { container.innerHTML = '<p class="col-span-full text-gray-500 text-center py-10 bg-white rounded-xl border border-dashed">ไม่มีคำขอซื้อใหม่</p>'; return; }
 
+        // [SPEED OPTIMIZATION] Batch DOM insertion
+        let htmlStr = '';
         appData.prList.forEach(pr => {
-            const card = document.createElement('div');
-            card.className = "glass-card p-5 border-l-4 border-l-red-400";
-            card.innerHTML = `
-                <div class="flex justify-between items-start mb-3">
-                    <span class="text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded shadow-sm">${pr.prNumber || 'PR'}</span>
-                    <span class="text-[11px] text-gray-500">คลัง: <span class="font-bold text-gray-800">${pr.warehouse}</span></span>
-                </div>
-                <p class="font-bold text-gray-800 text-lg leading-tight mb-1">${pr.product}</p>
-                <p class="text-brand-blue font-semibold text-sm mb-3">จำนวนขอ: <span class="text-lg">${pr.quantity}</span> ${pr.unit || ''}</p>
-                
-                <div class="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 mb-4 border border-gray-100">
-                    <p><span class="font-medium">ผู้ขอ:</span> ${pr.receiverName || 'พนักงาน'}</p>
-                    <p class="mt-1"><span class="font-medium">เหตุผล:</span> ${pr.remark || '-'}</p>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="rejectPR(${pr.rowNumber})" class="btn-outline-action btn-delete flex-1 justify-center py-2 text-sm">ไม่อนุมัติ</button>
-                    <button onclick="approvePRToPOForm(${pr.rowNumber})" class="btn-outline-action btn-success flex-1 justify-center py-2 text-sm border-emerald-300">✅ อนุมัติ</button>
+            htmlStr += `
+                <div class="glass-card p-5 border-l-4 border-l-red-400">
+                    <div class="flex justify-between items-start mb-3">
+                        <span class="text-xs font-bold text-red-600 bg-red-50 border border-red-100 px-2 py-1 rounded shadow-sm">${pr.prNumber || 'PR'}</span>
+                        <span class="text-[11px] text-gray-500">คลัง: <span class="font-bold text-gray-800">${pr.warehouse}</span></span>
+                    </div>
+                    <p class="font-bold text-gray-800 text-lg leading-tight mb-1">${pr.product}</p>
+                    <p class="text-brand-blue font-semibold text-sm mb-3">จำนวนขอ: <span class="text-lg">${pr.quantity}</span> ${pr.unit || ''}</p>
+                    
+                    <div class="bg-gray-50 p-3 rounded-lg text-xs text-gray-600 mb-4 border border-gray-100">
+                        <p><span class="font-medium">ผู้ขอ:</span> ${pr.receiverName || 'พนักงาน'}</p>
+                        <p class="mt-1"><span class="font-medium">เหตุผล:</span> ${pr.remark || '-'}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="rejectPR(${pr.rowNumber})" class="btn-outline-action btn-delete flex-1 justify-center py-2 text-sm">ไม่อนุมัติ</button>
+                        <button onclick="approvePRToPOForm(${pr.rowNumber})" class="btn-outline-action btn-success flex-1 justify-center py-2 text-sm border-emerald-300">✅ อนุมัติ</button>
+                    </div>
                 </div>
             `;
-            container.appendChild(card);
         });
+        container.innerHTML = htmlStr;
+        lucide.createIcons({ root: container });
     }
 
     function rejectPR(rowNumber) {
@@ -636,9 +486,7 @@
     function approvePRToPOForm(rowNumber) {
         const pr = appData.prList.find(p => p.rowNumber === rowNumber);
         if(!pr) return;
-
-        const vendorInput = document.getElementById('create-po-vendor');
-        vendorInput.value = "";
+        const vendorInput = document.getElementById('create-po-vendor'); vendorInput.value = "";
         const prodObj = appData.products.find(p => p.name === pr.product);
         if (prodObj && prodObj.vendor) vendorInput.value = prodObj.vendor;
 
@@ -647,36 +495,26 @@
         document.getElementById('modal-create-po-subtitle').innerText = `คุณสามารถปรับยอดจำนวนสั่ง หรือเพิ่มสินค้ารายการอื่นได้ก่อนกดบันทึก`;
         document.getElementById('create-po-warehouse').value = pr.warehouse || "";
         
-        const container = document.getElementById('create-po-items-container');
-        container.innerHTML = '';
+        document.getElementById('create-po-items-container').innerHTML = '';
         addCreatePoItemRow(pr.product, pr.quantity);
 
-        document.getElementById('modal-create-po').classList.remove('hidden');
-        document.getElementById('modal-create-po').classList.add('flex');
+        document.getElementById('modal-create-po').classList.remove('hidden'); document.getElementById('modal-create-po').classList.add('flex');
     }
 
     function openPurchasingForm() {
         document.getElementById('c-ref-pr-row').value = ""; 
         document.getElementById('modal-create-po-title').innerText = `สร้างบิลใหม่ (Direct PO)`;
         document.getElementById('modal-create-po-subtitle').innerText = `โปรดระบุข้อมูลให้ครบถ้วนก่อนบันทึก`;
-
-        document.getElementById('create-po-vendor').value = "";
-        document.getElementById('form-create-po').reset();
+        document.getElementById('create-po-vendor').value = ""; document.getElementById('form-create-po').reset();
         document.getElementById('create-po-items-container').innerHTML = '';
-        
         addCreatePoItemRow(); 
-        document.getElementById('modal-create-po').classList.remove('hidden');
-        document.getElementById('modal-create-po').classList.add('flex');
+        document.getElementById('modal-create-po').classList.remove('hidden'); document.getElementById('modal-create-po').classList.add('flex');
     }
 
-    function closeCreatePoModal() {
-        document.getElementById('modal-create-po').classList.add('hidden');
-        document.getElementById('modal-create-po').classList.remove('flex');
-    }
+    function closeCreatePoModal() { document.getElementById('modal-create-po').classList.add('hidden'); document.getElementById('modal-create-po').classList.remove('flex'); }
 
     function addCreatePoItemRow(product = '', qty = '') {
-        const container = document.getElementById('create-po-items-container');
-        const div = document.createElement('div');
+        const container = document.getElementById('create-po-items-container'); const div = document.createElement('div');
         div.className = "create-po-item-row flex items-center relative bg-white rounded-lg border border-gray-200 mt-2 focus-within:z-50";
         div.innerHTML = `
             <div class="flex-1 relative">
@@ -686,54 +524,35 @@
             <div class="w-32 border-l border-gray-200">
                 <input type="number" class="w-full px-3 py-2.5 text-sm font-bold text-gray-700 outline-none text-center c-qty" placeholder="จำนวน" min="1" value="${qty}" required>
             </div>
-            <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 px-4 py-2.5 font-bold transition border-l border-gray-200 bg-transparent border-none">
-                <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
+            <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 px-4 py-2.5 font-bold transition border-l border-gray-200 bg-transparent border-none"><i data-lucide="x" class="w-4 h-4"></i></button>
         `;
         container.appendChild(div);
-        setupProductAutocompleteForPO(div.querySelector('.c-product'));
-        lucide.createIcons();
+        setupProductAutocompleteForPO(div.querySelector('.c-product')); lucide.createIcons({root: div});
     }
 
     async function submitDirectPO(e) {
         e.preventDefault();
-        const vendor = document.getElementById('create-po-vendor').value.trim();
-        const warehouse = document.getElementById('create-po-warehouse').value;
-
+        const vendor = document.getElementById('create-po-vendor').value.trim(); const warehouse = document.getElementById('create-po-warehouse').value;
         if(!vendor || !warehouse) return showNotification('กรุณาเลือก Vendor และคลังสินค้าให้ครบถ้วน', 'warning');
 
-        const items = [];
-        let hasError = false;
+        const items = []; let hasError = false;
         document.querySelectorAll('.create-po-item-row').forEach(row => {
-            const product = row.querySelector('.c-product').value.trim();
-            const quantity = row.querySelector('.c-qty').value.trim();
-            if(!product || !quantity) hasError = true;
-            else items.push({ product, quantity });
+            const product = row.querySelector('.c-product').value.trim(); const quantity = row.querySelector('.c-qty').value.trim();
+            if(!product || !quantity) hasError = true; else items.push({ product, quantity });
         });
 
         if(hasError || items.length === 0) return showNotification('กรุณากรอกข้อมูลสินค้าให้ครบถ้วน', 'warning');
 
         const refPrRow = document.getElementById('c-ref-pr-row').value;
+        const btn = document.getElementById('btn-submit-direct-po'); btn.disabled = true; btn.innerHTML = '<div class="spinner spinner-sm mr-2 border-t-white"></div> บันทึก...';
 
-        document.getElementById('btn-submit-direct-po').disabled = true;
-        document.getElementById('btn-submit-direct-po').innerHTML = '<div class="spinner spinner-sm mr-2 border-t-white"></div> บันทึก...';
+        if (refPrRow) await apiAction('approvePR', { prRowNumber: parseInt(refPrRow), vendor: vendor, poNumber: "", warehouse: warehouse, items: items });
+        else await apiAction('createPO', { vendor, poNumber: "", warehouse, items });
 
-        if (refPrRow) {
-            await apiAction('approvePR', { 
-                prRowNumber: parseInt(refPrRow), vendor: vendor, poNumber: "", warehouse: warehouse, items: items 
-            });
-        } else {
-            await apiAction('createPO', { vendor, poNumber: "", warehouse, items });
-        }
-
-        closeCreatePoModal();
-        document.getElementById('btn-submit-direct-po').disabled = false;
-        document.getElementById('btn-submit-direct-po').innerText = 'บันทึกสั่งซื้อ (Create PO)';
+        closeCreatePoModal(); btn.disabled = false; btn.innerText = 'บันทึกสั่งซื้อ (Create PO)';
     }
 
-    // =========================================================================
-    // TAB 2: PO Dashboard
-    // =========================================================================
+    // --- TAB 2: PO Dashboard ---
     function groupPOData() {
       const groups = {};
       if(appData.pendingPOs) {
@@ -747,41 +566,28 @@
     }
 
     function renderTab2_PO() {
-        const container = document.getElementById('po-container');
-        const countEl = document.getElementById('po-count');
-        const search = document.getElementById('p-search').value.trim().toLowerCase();
-        const statusFilter = document.getElementById('p-status').value;
-        
-        container.innerHTML = '';
+        const container = document.getElementById('po-container'); const countEl = document.getElementById('po-count');
+        const search = document.getElementById('p-search').value.trim().toLowerCase(); const statusFilter = document.getElementById('p-status').value;
         
         let filtered = groupedPOs.filter(group => {
-            const hasOverdue = group.items.some(i => i.displayStatus === 'Overdue');
-            const hasDraft = group.items.some(i => i.status === 'Draft GR');
-            
+            const hasOverdue = group.items.some(i => i.displayStatus === 'Overdue'); const hasDraft = group.items.some(i => i.status === 'Draft GR');
             if(statusFilter === 'Overdue' && !hasOverdue) return false;
             if(statusFilter === 'Draft GR' && !hasDraft) return false;
             if(statusFilter === 'Pending GR' && (hasOverdue || hasDraft)) return false;
-            
-            if(search) {
-                const matchItem = group.items.some(i => i.product.toLowerCase().includes(search));
-                if(!group.vendor.toLowerCase().includes(search) && !(group.poNumber || '').toLowerCase().includes(search) && !matchItem) return false;
-            }
+            if(search && !group.vendor.toLowerCase().includes(search) && !(group.poNumber || '').toLowerCase().includes(search) && !group.items.some(i => i.product.toLowerCase().includes(search))) return false;
             return true;
         });
 
         countEl.innerText = `${filtered.length} บิล`;
+        let htmlStr = '';
 
-        filtered.forEach((group, idx) => {
-            const card = document.createElement('div');
-            card.className = "glass-card p-4 flex flex-col h-full relative"; 
-            
+        filtered.forEach((group) => {
             let whBadgeColor = 'bg-gray-200 text-gray-700'; 
             if(group.warehouse === 'W2' || group.warehouse === 'W3') whBadgeColor = 'bg-orange-100 text-brand-orange';
             else if(group.warehouse === 'W4') whBadgeColor = 'bg-green-100 text-green-700';
             else if(group.warehouse === 'C1') whBadgeColor = 'bg-blue-100 text-blue-700';
 
-            const hasOverdue = group.items.some(i => i.displayStatus === 'Overdue');
-            const hasDraft = group.items.some(i => i.status === 'Draft GR');
+            const hasOverdue = group.items.some(i => i.displayStatus === 'Overdue'); const hasDraft = group.items.some(i => i.status === 'Draft GR');
             let statusBadgeHtml = '';
             if (hasOverdue) statusBadgeHtml = `<span class="absolute -top-3 -right-2 bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1"><i data-lucide="alert-triangle" class="w-3 h-3"></i> Overdue</span>`;
             else if (hasDraft) statusBadgeHtml = `<span class="absolute -top-3 -right-2 bg-brand-blue text-white text-[10px] font-bold px-2 py-1 rounded-full shadow-md flex items-center gap-1"><i data-lucide="package" class="w-3 h-3"></i> กำลังลงของ</span>`;
@@ -796,7 +602,8 @@
 
             const rowNumbersToDelete = JSON.stringify(group.items.map(i => i.rowNumber));
 
-            card.innerHTML = `
+            htmlStr += `
+            <div class="glass-card p-4 flex flex-col h-full relative">
                 ${statusBadgeHtml}
                 <div class="flex justify-between items-start mb-4">
                     <div class="flex-1 pr-3">
@@ -805,7 +612,6 @@
                     </div>
                     <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded font-medium whitespace-nowrap flex-shrink-0">สั่ง: ${group.poDate}</span>
                 </div>
-                
                 <div class="mt-auto pt-3 border-t border-gray-50 flex justify-between items-end">
                     <div class="bg-brand-blueLight/50 border border-brand-blueLight px-2 py-1.5 rounded flex items-center gap-1.5 max-w-[60%]">
                         <span class="text-[10px] bg-white text-brand-blue p-0.5 rounded shadow-sm"><i data-lucide="building-2" class="w-3 h-3"></i></span>
@@ -817,20 +623,14 @@
                         </button>
                     </div>
                 </div>
-            `;
-            container.appendChild(card);
+            </div>`;
         });
+        container.innerHTML = htmlStr; lucide.createIcons({ root: container });
     }
 
-    function deletePO(rowNumbersArray) {
-        showConfirmModal("ยืนยันการลบบิลนี้ออกจากระบบใช่หรือไม่?", () => {
-             apiAction('deletePO', { rowNumbers: rowNumbersArray });
-        });
-    }
+    function deletePO(rowNumbersArray) { showConfirmModal("ยืนยันการลบบิลนี้ออกจากระบบใช่หรือไม่?", () => { apiAction('deletePO', { rowNumbers: rowNumbersArray }); }); }
 
-    // =========================================================================
-    // TAB 3: 2-Way Matching
-    // =========================================================================
+    // --- TAB 3: 2-Way Matching ---
     function groupGRData() {
         groupedMatchData = {};
         if(appData.grCompleted) {
@@ -844,14 +644,12 @@
 
     function renderTab3_Match() {
         const container = document.getElementById('match-container');
-        container.innerHTML = '';
-        if(Object.keys(groupedMatchData).length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-10 bg-white rounded-xl">ไม่มีรายการรอกระทบยอด</p>'; return; }
+        if(Object.keys(groupedMatchData).length === 0) { container.innerHTML = '<p class="text-gray-500 text-center py-10 bg-white rounded-xl border border-dashed">ไม่มีรายการรอกระทบยอด</p>'; return; }
 
+        let fullHtml = '';
         Object.values(groupedMatchData).forEach((group, gIdx) => {
-            const block = document.createElement('div');
-            block.className = "glass-card overflow-hidden shadow-sm";
-            
             let html = `
+            <div class="glass-card overflow-hidden shadow-sm">
                 <div class="bg-gray-800 text-white px-4 md:px-5 py-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                     <div class="flex flex-col md:flex-row md:items-center gap-3 w-full md:w-auto">
                         <span class="font-bold text-lg text-white">กลุ่มรายการรอกระทบยอด</span>
@@ -861,32 +659,21 @@
                 </div>
                 
                 <div class="bg-brand-blueLight/30 border-b border-brand-blueLight px-4 py-2 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
-                    <span class="text-xs text-brand-blue font-bold flex items-center gap-1">
-                        <i data-lucide="zap" class="w-4 h-4"></i> จัดการด่วน (Quick Fill)
-                    </span>
+                    <span class="text-xs text-brand-blue font-bold flex items-center gap-1"><i data-lucide="zap" class="w-4 h-4"></i> จัดการด่วน (Quick Fill)</span>
                     <div class="flex items-center gap-2 w-full sm:w-auto">
                         <input type="text" id="quick-fill-po-${gIdx}" class="input-field py-1 px-2 text-sm border-brand-blue/30 w-full sm:w-48 bg-white" placeholder="ระบุเลข PO เพื่อใส่ทั้งหมด...">
-                        <button onclick="applyQuickFillPO(${gIdx})" class="btn-create py-1 px-3 text-xs bg-brand-blue text-white rounded whitespace-nowrap min-w-max">
-                            นำไปใช้
-                        </button>
+                        <button onclick="applyQuickFillPO(${gIdx})" class="btn-create py-1 px-3 text-xs bg-brand-blue text-white rounded whitespace-nowrap min-w-max">นำไปใช้</button>
                     </div>
                 </div>
-
                 <div class="p-0" id="match-items-group-${gIdx}">
             `;
 
             group.items.forEach((item, iIdx) => {
-                const poQty = parseFloat(item.quantity) || 0; 
-                const grQty = parseFloat(item.grQty) || 0;    
-                const isMatched = poQty === grQty;
-                const isExtra = poQty === 0 && grQty > 0; 
+                const poQty = parseFloat(item.quantity) || 0; const grQty = parseFloat(item.grQty) || 0;    
+                const isMatched = poQty === grQty; const isExtra = poQty === 0 && grQty > 0; 
                 
-                const matchIcon = isMatched ? 
-                    `<div class="bg-green-100 text-green-600 p-2 rounded-full"><i data-lucide="check" class="w-5 h-5"></i></div>` : 
-                    (isExtra ? 
-                        `<div class="bg-purple-100 text-purple-600 p-2 rounded-full font-bold text-xs"><i data-lucide="gift" class="w-5 h-5"></i></div>` :
-                        `<div class="bg-red-100 text-red-600 p-2 rounded-full"><i data-lucide="alert-triangle" class="w-5 h-5"></i></div>`
-                    );
+                const matchIcon = isMatched ? `<div class="bg-green-100 text-green-600 p-2 rounded-full"><i data-lucide="check" class="w-5 h-5"></i></div>` : 
+                    (isExtra ? `<div class="bg-purple-100 text-purple-600 p-2 rounded-full font-bold text-xs"><i data-lucide="gift" class="w-5 h-5"></i></div>` : `<div class="bg-red-100 text-red-600 p-2 rounded-full"><i data-lucide="alert-triangle" class="w-5 h-5"></i></div>`);
 
                 html += `
                     <div class="border-b border-gray-100 last:border-0 p-4 md:p-5 ${isExtra ? 'bg-purple-50/20' : 'bg-white'} match-row">
@@ -906,33 +693,17 @@
                                     <span class="text-lg font-bold ${isExtra ? 'text-gray-400' : 'text-gray-800'}">${poQty} <span class="text-xs font-normal">${item.unit || ''}</span></span>
                                 </div>
                             </div>
-                            
-                            <div class="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 border border-gray-100 shadow-sm">
-                                ${matchIcon}
-                            </div>
-
+                            <div class="hidden md:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 bg-white rounded-full p-1 border border-gray-100 shadow-sm">${matchIcon}</div>
                             <div class="bg-brand-orangeLight/50 p-3 rounded-lg border border-brand-orangeLight relative">
                                 <span class="text-[10px] font-bold text-brand-orange uppercase tracking-wider mb-2 block">2. ฝั่งรับจริง (GR) - <span class="text-brand-orange">แก้ไขยอดได้</span></span>
                                 <div class="flex items-center gap-3">
-                                    <div class="flex-1">
-                                        <label class="text-[10px] text-gray-500">จำนวนรับ</label>
-                                        <input type="number" id="match-grqty-${item.rowNumber}" class="input-field py-1.5 px-2 text-base font-bold ${isMatched || isExtra ? 'text-brand-orange' : 'text-red-600'} border-orange-200" value="${grQty}">
-                                    </div>
-                                    <div class="w-1/3">
-                                        <label class="text-[10px] text-gray-500">หน่วย</label>
-                                        <input type="text" disabled class="input-field py-1.5 px-2 text-sm border-orange-100 bg-orange-50/50 cursor-not-allowed" value="${item.unit || ''}">
-                                    </div>
-                                    <div class="w-1/3">
-                                        <label class="text-[10px] text-gray-500">Loc.In</label>
-                                        <input type="text" disabled class="input-field py-1.5 px-2 text-sm border-orange-100 bg-orange-50/50 cursor-not-allowed" value="${item.locIn || ''}">
-                                    </div>
+                                    <div class="flex-1"><label class="text-[10px] text-gray-500">จำนวนรับ</label><input type="number" id="match-grqty-${item.rowNumber}" class="input-field py-1.5 px-2 text-base font-bold ${isMatched || isExtra ? 'text-brand-orange' : 'text-red-600'} border-orange-200" value="${grQty}"></div>
+                                    <div class="w-1/3"><label class="text-[10px] text-gray-500">หน่วย</label><input type="text" disabled class="input-field py-1.5 px-2 text-sm border-orange-100 bg-orange-50/50 cursor-not-allowed" value="${item.unit || ''}"></div>
+                                    <div class="w-1/3"><label class="text-[10px] text-gray-500">Loc.In</label><input type="text" disabled class="input-field py-1.5 px-2 text-sm border-orange-100 bg-orange-50/50 cursor-not-allowed" value="${item.locIn || ''}"></div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div class="mt-3">
-                            <input type="text" id="match-remark-${item.rowNumber}" class="input-field bg-gray-50 text-sm ${isMatched || isExtra ? '' : 'border-orange-300 bg-orange-50 text-brand-orange'}" placeholder="ระบุหมายเหตุสำหรับการตั้งหนี้ (ถ้ามี)..." value="${isMatched ? '' : (item.remark ? item.remark : '')}">
-                        </div>
+                        <div class="mt-3"><input type="text" id="match-remark-${item.rowNumber}" class="input-field bg-gray-50 text-sm ${isMatched || isExtra ? '' : 'border-orange-300 bg-orange-50 text-brand-orange'}" placeholder="ระบุหมายเหตุสำหรับการตั้งหนี้ (ถ้ามี)..." value="${isMatched ? '' : (item.remark ? item.remark : '')}"></div>
                     </div>
                 `;
             });
@@ -940,38 +711,28 @@
             html += `
                 </div>
                 <div class="p-4 bg-brand-orangeLight/30 border-t border-gray-100">
-                    <button onclick="addExtraGRItem(${gIdx})" class="w-full border-2 border-dashed border-brand-orange/40 text-brand-orange bg-white hover:bg-orange-50 py-2 rounded-lg text-sm font-bold transition flex items-center justify-center gap-1.5">
-                        <i data-lucide="plus" class="w-4 h-4"></i> เพิ่มสินค้านอกบิล / ของแถม (ที่ GR ลืมคีย์)
-                    </button>
+                    <button onclick="addExtraGRItem(${gIdx})" class="w-full border-2 border-dashed border-brand-orange/40 text-brand-orange bg-white hover:bg-orange-50 py-2 rounded-lg text-sm font-bold transition flex items-center justify-center gap-1.5"><i data-lucide="plus" class="w-4 h-4"></i> เพิ่มสินค้านอกบิล / ของแถม (ที่ GR ลืมคีย์)</button>
                 </div>
-
                 <div class="bg-gray-50 px-4 py-4 flex flex-col md:flex-row justify-between items-center border-t border-gray-200 gap-3">
                     <span class="text-xs text-gray-500">ตรวจสอบความถูกต้องก่อนกดส่งตั้งหนี้ (ข้อมูลจะถูกล็อค)</span>
                     <button onclick="confirmClosePO(${gIdx})" class="btn-create py-2.5 px-6 text-sm font-bold shadow-md bg-green-700 hover:bg-green-800 w-full md:w-auto">✅ Approve PO & Close (ส่งทำจ่าย)</button>
                 </div>
-            `;
-            block.innerHTML = html;
-            container.appendChild(block);
+            </div>`;
+            fullHtml += html;
         });
+        container.innerHTML = fullHtml; lucide.createIcons({ root: container });
     }
 
     function addExtraGRItem(gIdx) {
-        const container = document.getElementById(`match-items-group-${gIdx}`);
-        const div = document.createElement('div');
+        const container = document.getElementById(`match-items-group-${gIdx}`); const div = document.createElement('div');
         div.className = "border-b border-gray-100 last:border-0 p-5 bg-brand-orangeLight/30 match-row relative";
         div.innerHTML = `
             <button onclick="this.parentElement.remove()" class="absolute top-2 right-2 text-red-400 hover:text-red-600 bg-white p-1 rounded-md shadow-sm border-none"><i data-lucide="x" class="w-4 h-4"></i></button>
             <p class="font-bold text-brand-orange mb-2 text-sm flex items-center gap-1"><i data-lucide="gift" class="w-4 h-4"></i> เพิ่มของแถม / สินค้านอกบิล</p>
-            
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-                <div class="bg-gray-50 p-3 rounded-lg border border-gray-100 flex items-center justify-center opacity-50">
-                    <span class="text-xs text-gray-400">ไม่มีใน PO เดิม</span>
-                </div>
+                <div class="bg-gray-50 p-3 rounded-lg border border-gray-100 flex items-center justify-center opacity-50"><span class="text-xs text-gray-400">ไม่มีใน PO เดิม</span></div>
                 <div class="bg-brand-orangeLight/50 p-3 rounded-lg border border-brand-orange/30">
-                    <div class="mb-2">
-                        <label class="text-[10px] text-gray-500">ชื่อสินค้าใหม่</label>
-                        <input type="text" class="input-field py-1.5 text-sm font-bold text-gray-800" placeholder="ระบุชื่อสินค้า...">
-                    </div>
+                    <div class="mb-2"><label class="text-[10px] text-gray-500">ชื่อสินค้าใหม่</label><input type="text" class="input-field py-1.5 text-sm font-bold text-gray-800" placeholder="ระบุชื่อสินค้า..."></div>
                     <div class="flex items-center gap-2">
                         <div class="flex-1"><label class="text-[10px] text-gray-500">จำนวนรับ</label><input type="number" class="input-field py-1.5 px-2 text-base font-bold text-brand-orange border-brand-orange/30" placeholder="0"></div>
                         <div class="w-1/3"><label class="text-[10px] text-gray-500">หน่วย</label><input type="text" class="input-field py-1.5 px-2 text-sm border-brand-orange/20" placeholder="ระบุ"></div>
@@ -981,71 +742,37 @@
             </div>
             <div class="mt-3"><input type="text" class="input-field bg-white text-sm border-brand-orange/20" placeholder="ระบุหมายเหตุ..." value="ของแถมฟรี"></div>
         `;
-        container.appendChild(div);
-        lucide.createIcons();
+        container.appendChild(div); lucide.createIcons({ root: div });
     }
 
     function confirmClosePO(gIdx) {
         const group = Object.values(groupedMatchData)[gIdx];
-        
-        let allHavePO = true;
-        let missingPOProduct = "";
+        let allHavePO = true; let missingPOProduct = "";
 
         try {
             const itemsToClose = group.items.map(item => {
-                const grQtyInput = document.getElementById(`match-grqty-${item.rowNumber}`);
-                const remarkInput = document.getElementById(`match-remark-${item.rowNumber}`);
-                const poInput = document.getElementById(`match-item-po-${item.rowNumber}`);
-                
-                const originalPoQty = parseFloat(item.quantity) || 0;
-                const revisedGrQty = grQtyInput ? parseFloat(grQtyInput.value) : (parseFloat(item.grQty) || 0);
-                const remark = remarkInput ? remarkInput.value.trim() : '';
-                const itemPoNumber = poInput ? poInput.value.trim() : (item.poNumber || '');
+                const grQtyInput = document.getElementById(`match-grqty-${item.rowNumber}`); const remarkInput = document.getElementById(`match-remark-${item.rowNumber}`); const poInput = document.getElementById(`match-item-po-${item.rowNumber}`);
+                const originalPoQty = parseFloat(item.quantity) || 0; const revisedGrQty = grQtyInput ? parseFloat(grQtyInput.value) : (parseFloat(item.grQty) || 0);
+                const remark = remarkInput ? remarkInput.value.trim() : ''; const itemPoNumber = poInput ? poInput.value.trim() : (item.poNumber || '');
 
-                if (!itemPoNumber) {
-                    allHavePO = false;
-                    missingPOProduct = item.product;
-                }
-
-                // ปิดการตรวจสอบบังคับใส่หมายเหตุเมื่อจำนวนไม่ตรง
-                // if (originalPoQty > 0 && originalPoQty !== revisedGrQty && remark === '') {
-                //     throw new Error(`สินค้ารายการ "${item.product}" มียอดรับไม่ตรงกับที่สั่ง กรุณาระบุหมายเหตุ (เช่น ของแถม, ขาดส่ง)`);
-                // }
-
+                if (!itemPoNumber) { allHavePO = false; missingPOProduct = item.product; }
                 return { rowNumber: item.rowNumber, revisedGrQty: revisedGrQty, matchRemark: remark, poNumber: itemPoNumber };
             });
 
-            if (!allHavePO) {
-                return showNotification(`กรุณาระบุเลข PO สำหรับรายการ "${missingPOProduct}" ให้ครบถ้วนก่อนส่งตั้งหนี้`, 'warning');
-            }
-
-            showConfirmModal(`ยืนยันการตรวจสอบและ Approve บิลใช่หรือไม่?\n\n* ระบบจะบันทึกเลข PO แยกตามรายสินค้าลงในชีท\n* ข้อมูลจะถูกล็อคและไม่สามารถแก้ไขยอดรับได้อีก`, () => {
-                apiAction('closePO', { items: itemsToClose });
-            });
-        } catch(e) {
-            showNotification(e.message, 'warning'); 
-        }
+            if (!allHavePO) return showNotification(`กรุณาระบุเลข PO สำหรับรายการ "${missingPOProduct}" ให้ครบถ้วนก่อนส่งตั้งหนี้`, 'warning');
+            showConfirmModal(`ยืนยันการตรวจสอบและ Approve บิลใช่หรือไม่?\n\n* ระบบจะบันทึกเลข PO แยกตามรายสินค้าลงในชีท\n* ข้อมูลจะถูกล็อคและไม่สามารถแก้ไขยอดรับได้อีก`, () => { apiAction('closePO', { items: itemsToClose }); });
+        } catch(e) { showNotification(e.message, 'warning'); }
     }
 
     function applyQuickFillPO(gIdx) {
         const quickFillValue = document.getElementById(`quick-fill-po-${gIdx}`).value.trim();
-        if (!quickFillValue) {
-            return showNotification('กรุณาระบุเลข PO ที่ต้องการใช้กับทุกรายการ', 'warning');
-        }
-        
-        const inputs = document.querySelectorAll(`.po-input-gIdx-${gIdx}`);
-        let count = 0;
-        inputs.forEach(input => {
-            input.value = quickFillValue;
-            count++;
-        });
-        
+        if (!quickFillValue) return showNotification('กรุณาระบุเลข PO ที่ต้องการใช้กับทุกรายการ', 'warning');
+        const inputs = document.querySelectorAll(`.po-input-gIdx-${gIdx}`); let count = 0;
+        inputs.forEach(input => { input.value = quickFillValue; count++; });
         showNotification(`ใส่เลข PO ให้ ${count} รายการเรียบร้อย`, 'success');
     }
 
-    // =========================================================================
-    // TAB 4: APV (ใบตั้งหนี้)
-    // =========================================================================
+    // --- TAB 4: APV ---
     function groupAPVData() {
         groupedAPVData = {};
         if(appData.apvList) {
@@ -1059,32 +786,26 @@
 
     function renderTab4_APV() {
         const container = document.getElementById('apv-container');
-        container.innerHTML = '';
-        if(Object.keys(groupedAPVData).length === 0) { 
-            container.innerHTML = '<p class="col-span-full text-gray-500 text-center py-10 bg-white rounded-xl border border-dashed">ไม่มีรายการที่พร้อมตั้งหนี้</p>'; 
-            return; 
-        }
+        if(Object.keys(groupedAPVData).length === 0) { container.innerHTML = '<p class="col-span-full text-gray-500 text-center py-10 bg-white rounded-xl border border-dashed">ไม่มีรายการที่พร้อมตั้งหนี้</p>'; return; }
 
+        let htmlStr = '';
         Object.values(groupedAPVData).forEach(apv => {
-            const card = document.createElement('div');
-            card.className = "glass-card p-5 border-l-4 border-l-green-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-4";
-            card.innerHTML = `
-                <div>
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="font-bold text-lg text-gray-800">RPO-${apv.poNumber || 'ไม่มีเลข'}</span>
-                        <span class="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold uppercase">Ready for APV</span>
+            htmlStr += `
+                <div class="glass-card p-5 border-l-4 border-l-green-500 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="font-bold text-lg text-gray-800">RPO-${apv.poNumber || 'ไม่มีเลข'}</span>
+                            <span class="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded font-bold uppercase">Ready for APV</span>
+                        </div>
+                        <p class="text-sm text-gray-600 font-medium">🏢 ${apv.vendor}</p>
+                        <p class="text-xs text-gray-500 mt-1">จำนวน ${apv.items.length} รายการ (กระทบยอดเรียบร้อย)</p>
                     </div>
-                    <p class="text-sm text-gray-600 font-medium">🏢 ${apv.vendor}</p>
-                    <p class="text-xs text-gray-500 mt-1">จำนวน ${apv.items.length} รายการ (กระทบยอดเรียบร้อย)</p>
+                    <button onclick="showNotification('ฟังก์ชันดึงเอกสารอยู่ระหว่างพัฒนา', 'warning')" class="btn-create bg-gray-800 hover:bg-gray-900 shadow-md whitespace-nowrap w-full md:w-auto"><i data-lucide="download" class="w-4 h-4"></i> ดึงข้อมูลทำจ่าย</button>
                 </div>
-                <button onclick="showNotification('ฟังก์ชันดึงเอกสารอยู่ระหว่างพัฒนา', 'warning')" class="btn-create bg-gray-800 hover:bg-gray-900 shadow-md whitespace-nowrap w-full md:w-auto">
-                    <i data-lucide="download" class="w-4 h-4"></i> ดึงข้อมูลทำจ่าย
-                </button>
             `;
-            container.appendChild(card);
         });
+        container.innerHTML = htmlStr; lucide.createIcons({ root: container });
     }
-
   </script>
 </body>
 </html>
