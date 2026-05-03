@@ -146,13 +146,16 @@
 
   <script>
     const APP_CONFIG = {
-        API_URL: "https://script.google.com/macros/s/AKfycbxSomEq-O49vgID_6P-3XfoGuM86rM0dWPQS-ZMsFDvF-_N-O3EkaOS1Cdgg8nkxNfe/exec",
+        // !!! สำคัญมาก: URL ตรงนี้ต้องเป็น URL ของ Web App ตัวที่เป็น Main Menu (Portal) นะครับ 
+        // เพราะมันจะใช้ตรวจ Token ว่ามาจาก Portal จริงๆ
+        API_URL: "https://script.google.com/macros/s/AKfycbxMdnPcafzGl-ekKcttDGWwAfQE1AfQ3L8zssLIF8jvP513ajVvAnAaAtocjboiwqvD/exec", 
         PORTAL_URL: "https://akra-web.github.io/Main/", 
         REQUIRED_ROLES: ["ADMIN", "AKRA", "WAREHOUSE", "PURCHASING", "USER"], // ให้ขอได้ทุกคน
         APP_NAME: "แบบฟอร์มขอซื้อสินค้า (PR)",
-        STORAGE_KEY: "akra_pr_session"
+        STORAGE_KEY: "akra_pr_session_token" // เปลี่ยนชื่อ Key เล็กน้อยเพื่อไม่ให้ตีกับระบบเก่า
     };
 
+    // อันนี้คือ URL สำหรับเก็บ/ดึงข้อมูลสินค้าของระบบ PR (คนละตัวกับ API_URL ข้างบน)
     const DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3NN7K_xfa80rE9bQOYFbRkjgBAbOm3ONYyfn7veuR1nK6lGTs3aJfbsWR8CYkySo/exec";
     
     let appData = { products: [] };
@@ -188,51 +191,57 @@
             UI.showLoading();
 
             try {
+                // 1. ดึง Token จาก URL หรือจาก Local Storage
                 const urlParams = new URLSearchParams(window.location.search);
-                let requestedUser = urlParams.get('user');
+                const ssoToken = urlParams.get('sso'); 
+                let savedToken = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
+                
+                let tokenToVerify = null;
 
-                if (requestedUser) {
-                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, requestedUser);
+                if (ssoToken) {
+                    tokenToVerify = ssoToken;
+                    // ลบ Token ออกจาก URL บนแถบ Address Bar เพื่อความสะอาดตาและปลอดภัย
                     window.history.replaceState({}, document.title, window.location.pathname);
-                } else {
-                    requestedUser = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
+                } else if (savedToken) {
+                    tokenToVerify = savedToken;
                 }
 
-                if (!requestedUser) {
+                // 2. ถ้าไม่มี Token เลย ให้เด้งกลับไปหน้าหลัก
+                if (!tokenToVerify) {
                     window.location.href = APP_CONFIG.PORTAL_URL;
                     return;
                 }
 
-                const response = await fetch(`${APP_CONFIG.API_URL}?action=getUsers`);
+                // 3. ส่ง Token ไปถามเซิร์ฟเวอร์หลัก (Portal) ว่า Token นี้ของจริงและหมดอายุหรือยัง
+                const rolesParam = APP_CONFIG.REQUIRED_ROLES.join(',');
+                const verifyUrl = `${APP_CONFIG.API_URL}?action=verifyToken&token=${encodeURIComponent(tokenToVerify)}&roles=${encodeURIComponent(rolesParam)}`;
+
+                const response = await fetch(verifyUrl);
                 if (!response.ok) throw new Error("API_ERROR");
-                const dbUsers = await response.json();
+                
+                const data = await response.json();
 
-                let matchedUser = null;
-                for (const id in dbUsers) {
-                    if (dbUsers[id].name === requestedUser) {
-                        matchedUser = dbUsers[id];
-                        break;
-                    }
-                }
-
-                if (!matchedUser) {
-                    UI.showError("ข้อมูลผู้ใช้ไม่ถูกต้อง หรือถูกลบออกจากระบบ");
-                    localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
-                    return;
-                }
-
-                const userRoles = Array.isArray(matchedUser.roles) ? matchedUser.roles : [matchedUser.roles];
-                const hasPermission = userRoles.some(role => APP_CONFIG.REQUIRED_ROLES.includes(role));
-
-                if (hasPermission) {
-                    window.currentUser = matchedUser.name;
-                    UI.showApp(matchedUser.name);
+                // 4. ตรวจสอบผลลัพธ์
+                if (data.valid) {
+                    // อนุญาตให้เข้าใช้งาน
+                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, tokenToVerify);
+                    window.currentUser = data.user.name;
+                    
+                    UI.showApp(data.user.name);
                     AuthGuard.bindEvents();
                     
-                    // หลังจากตรวจสอบสิทธิ์ผ่านแล้ว จึงโหลดข้อมูล
+                    // หลังจากตรวจสอบสิทธิ์ผ่านแล้ว จึงโหลดข้อมูลสินค้า
                     await loadInitialData();
                 } else {
-                    UI.showError("คุณไม่มีสิทธิ์ระดับ " + APP_CONFIG.REQUIRED_ROLES.join(', ') + " ในการเข้าถึงแอปพลิเคชันนี้");
+                    // ไม่อนุญาต กรณี Token หมดอายุ หรือ สิทธิ์ไม่ถึง
+                    let errorMsg = "เซสชันหมดอายุ หรือเซิร์ฟเวอร์ปฏิเสธการเชื่อมต่อ";
+                    if (data.reason === 'permission_denied') {
+                        errorMsg = `คุณไม่มีสิทธิ์ระดับ [${APP_CONFIG.REQUIRED_ROLES.join(', ')}] ในการเข้าถึงแอปพลิเคชันนี้`;
+                    } else if (data.reason === 'invalid_or_expired_token') {
+                        errorMsg = "ข้อมูลการเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบใหม่ผ่าน Portal";
+                    }
+                    
+                    UI.showError(errorMsg);
                     localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
                 }
 
