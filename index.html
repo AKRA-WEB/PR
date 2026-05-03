@@ -159,6 +159,7 @@
 
   <script>
     var APP_CONFIG = {
+        // !!! สำคัญมาก: เปลี่ยนเป็น API ของ Main Menu เพื่อตรวจ Token
         API_URL: "https://script.google.com/macros/s/AKfycbwv2oGqYocA-k-EN2qjs_rf64gc9kDCG2o2nIKlAW0BDCT0rXLvcgLurCRaQXjuC-OG/exec",
         PORTAL_URL: "https://akra-web.github.io/Main/", 
         REQUIRED_ROLES: ["ADMIN", "AKRA", "WAREHOUSE", "PURCHASING", "USER"],
@@ -166,6 +167,7 @@
         STORAGE_KEY: "akra_pr_session"
     };
 
+    // API สำหรับโหลด/ส่งข้อมูลสินค้าของแอพ PR
     var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwA1Z2MS6ac_sNrXz3jpX1iHkBj3nY04kcWZdOxgkCGr8sklLgWyLAuq2Ib6wx7x_w/exec";
     
     var appData = { products: [] };
@@ -211,49 +213,74 @@
                 }
 
                 const urlParams = new URLSearchParams(window.location.search);
-                let requestedUser = urlParams.get('user');
+                const ssoToken  = urlParams.get('sso');
 
-                if (requestedUser) {
-                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, requestedUser);
+                if (ssoToken) {
+                    // [HOTFIX] แปลงช่องว่างกลับเป็นเครื่องหมาย + เหมือนระบบ GR
+                    const fixedSsoToken = ssoToken.replace(/ /g, '+');
                     window.history.replaceState({}, document.title, window.location.pathname);
-                } else {
-                    requestedUser = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
-                }
 
-                if (!requestedUser) {
-                    window.location.href = APP_CONFIG.PORTAL_URL;
-                    return;
-                }
+                    const rolesParam = APP_CONFIG.REQUIRED_ROLES.length
+                        ? '&roles=' + APP_CONFIG.REQUIRED_ROLES.join(',')
+                        : '';
+                    const verifyURL = `${APP_CONFIG.API_URL}?action=verifyToken&token=${encodeURIComponent(fixedSsoToken)}${rolesParam}`;
+                    
+                    const response  = await fetch(verifyURL);
+                    if (!response.ok) throw new Error("API_ERROR");
+                    const result = await response.json();
 
-                const response = await fetch(`${APP_CONFIG.API_URL}?action=getUsers`);
-                if (!response.ok) throw new Error("API_ERROR");
-                const dbUsers = await response.json();
-
-                let matchedUser = null;
-                for (const id in dbUsers) {
-                    if (dbUsers[id].name === requestedUser) {
-                        matchedUser = dbUsers[id];
-                        break;
+                    if (!result.valid) {
+                        const errorMsg = {
+                            token_expired:    'Session หมดอายุ กรุณาเข้าสู่ระบบใหม่',
+                            user_not_found:   'ข้อมูลผู้ใช้ไม่ถูกต้อง หรือถูกลบออกจากระบบ',
+                            permission_denied:'คุณไม่มีสิทธิ์ระดับ ' + APP_CONFIG.REQUIRED_ROLES.join(', ') + ' ในการเข้าถึงแอปนี้',
+                            invalid_token:    'ไม่สามารถยืนยันตัวตนได้ กรุณาเข้าสู่ระบบใหม่'
+                        };
+                        localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+                        UI.showError(errorMsg[result.reason] || 'เกิดข้อผิดพลาดในการยืนยันตัวตน');
+                        return;
                     }
-                }
 
-                if (!matchedUser) {
-                    UI.showError("ข้อมูลผู้ใช้ไม่ถูกต้อง หรือถูกลบออกจากระบบ");
-                    localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
-                    return;
-                }
+                    // ผ่านแล้ว เก็บ Session ลงเครื่อง
+                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify({
+                        name:  result.user.name,
+                        id:    result.user.id,
+                        roles: result.user.roles
+                    }));
 
-                const userRoles = Array.isArray(matchedUser.roles) ? matchedUser.roles : [matchedUser.roles];
-                const hasPermission = userRoles.some(role => APP_CONFIG.REQUIRED_ROLES.includes(role));
-
-                if (hasPermission) {
-                    window.currentUser = matchedUser.name;
-                    UI.showApp(matchedUser.name);
+                    window.currentUser = result.user.name;
+                    UI.showApp(result.user.name);
                     AuthGuard.bindEvents();
                     await loadInitialData();
+
                 } else {
-                    UI.showError("คุณไม่มีสิทธิ์ระดับ " + APP_CONFIG.REQUIRED_ROLES.join(', ') + " ในการเข้าถึงแอปพลิเคชันนี้");
-                    localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+                    // ไม่มี Token ตรวจ session เดิม
+                    const cached = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
+                    if (!cached) {
+                        UI.showError("กรุณาเข้าสู่ระบบผ่านหน้า Portal");
+                        return;
+                    }
+
+                    let session;
+                    try { session = JSON.parse(cached); } catch(e) {
+                        localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+                        UI.showError("Session ไม่ถูกต้อง กรุณาเข้าสู่ระบบใหม่");
+                        return;
+                    }
+
+                    const hasPermission = APP_CONFIG.REQUIRED_ROLES.length === 0 ||
+                        session.roles.some(r => APP_CONFIG.REQUIRED_ROLES.includes(r));
+
+                    if (!hasPermission) {
+                        localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+                        UI.showError("คุณไม่มีสิทธิ์ระดับ " + APP_CONFIG.REQUIRED_ROLES.join(', ') + " ในการเข้าถึงแอปพลิเคชันนี้");
+                        return;
+                    }
+
+                    window.currentUser = session.name;
+                    UI.showApp(session.name);
+                    AuthGuard.bindEvents();
+                    await loadInitialData();
                 }
 
             } catch (error) {
