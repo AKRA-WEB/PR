@@ -273,23 +273,30 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    const APP_CONFIG = {
-        API_URL: "https://script.google.com/macros/s/AKfycbxSomEq-O49vgID_6P-3XfoGuM86rM0dWPQS-ZMsFDvF-_N-O3EkaOS1Cdgg8nkxNfe/exec",
+    // -------------------------------------------------------------------------
+    // แก้ไข Syntax Error: ใช้ var แทน let/const ในระดับ Global เพื่อป้องกันการชนกันเวลาโหลดซ้ำ
+    // -------------------------------------------------------------------------
+    var APP_CONFIG = {
+        // !!! ต้องเป็น API URL ของระบบ Main Menu เท่านั้น !!! เพื่อให้ตรวจสอบ Token SSO ได้
+        API_URL: "https://script.google.com/macros/s/AKfycbxGddluKdxhpthZZvpJmY3dOWlNMJaqNt14RWMbEdi-GsROQsmhvWRHUEvGIm0QwE1-/exec",
         PORTAL_URL: "https://akra-web.github.io/Main/", 
         REQUIRED_ROLES: ["ADMIN", "AKRA", "PURCHASING"], 
         APP_NAME: "ระบบจัดซื้อ (PO)",
-        STORAGE_KEY: "akra_po_session"
+        STORAGE_KEY: "akra_po_session_token"
     };
 
     // Data API (คนละตัวกับ Auth API)
-    const DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3NN7K_xfa80rE9bQOYFbRkjgBAbOm3ONYyfn7veuR1nK6lGTs3aJfbsWR8CYkySo/exec";
+    var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3NN7K_xfa80rE9bQOYFbRkjgBAbOm3ONYyfn7veuR1nK6lGTs3aJfbsWR8CYkySo/exec";
     
-    let appData = { prList: [], pendingPOs: [], grCompleted: [], apvList: [], vendors: [], products: [] };
-    let groupedPOs = [];
-    let groupedMatchData = {};
-    let isVendorEventsAttached = false; 
+    // เปลี่ยน let เป็น var ป้องกัน SyntaxError: Identifier has already been declared
+    var appData = { prList: [], pendingPOs: [], grCompleted: [], apvList: [], vendors: [], products: [] };
+    var groupedPOs = [];
+    var groupedMatchData = {};
+    var groupedAPVData = {}; // ประกาศเพิ่มเพื่อป้องกันตัวแปรลอย (Implicit Global)
+    var isVendorEventsAttached = false; 
+    var confirmCallback = null;
 
-    const UI = {
+    var UI = {
         showLoading: () => {
             document.body.classList.add('loading-active');
             document.getElementById('auth-loading').classList.remove('hidden');
@@ -311,78 +318,73 @@
         }
     };
 
-    const AuthGuard = {
+    // อัปเดต AuthGuard ให้รองรับการตรวจสอบ Token จาก Portal (SSO)
+    var AuthGuard = {
         init: async () => {
             lucide.createIcons();
             UI.showLoading();
 
             try {
+                // 1. ดึง Token จาก URL หรือจาก Local Storage
                 const urlParams = new URLSearchParams(window.location.search);
-                let requestedUser = urlParams.get('user');
-
-                // 1. ตรวจสอบว่าเปิดผ่าน Canvas/Preview หรือทดสอบบนเครื่องตัวเองหรือไม่
+                const ssoToken = urlParams.get('sso'); 
+                let savedToken = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
+                
+                let tokenToVerify = null;
                 const isPreviewEnv = window.self !== window.top || window.location.hostname === "" || window.location.hostname === "localhost" || window.location.hostname.includes("googleusercontent");
 
-                if (requestedUser) {
-                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, requestedUser);
-                    window.location.search = ''; // ล้าง URL เพื่อความสะอาด
-                } else {
-                    requestedUser = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
+                if (ssoToken) {
+                    tokenToVerify = ssoToken;
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                } else if (savedToken) {
+                    tokenToVerify = savedToken;
                 }
 
-                // 2. Bypass โหมด Preview: ถ้าอยู่ในหน้าต่างทดสอบ ให้เข้าสู่ระบบจำลองทันที
-                if (!requestedUser && isPreviewEnv) {
+                // 2. Bypass สำหรับโหมดทดสอบ
+                if (!tokenToVerify && isPreviewEnv) {
                     console.log("เข้าสู่โหมดทดสอบ (Preview Mode)");
                     window.currentUser = "โหมดทดสอบ (Preview)";
                     UI.showApp(window.currentUser);
                     AuthGuard.bindEvents();
                     await loadInitialData();
-                    return; // ข้ามการเช็คสิทธิ์ไปเลย
+                    return; 
                 }
 
-                // 3. ถ้าไม่มี User และไม่ใช่หน้าจอ Preview ให้เด้งกลับไป Portal
-                if (!requestedUser) {
+                if (!tokenToVerify) {
                     window.location.href = APP_CONFIG.PORTAL_URL;
                     return;
                 }
 
-                const response = await fetch(`${APP_CONFIG.API_URL}?action=getUsers`);
+                // 3. ยิง Token ไปถามเซิร์ฟเวอร์หลัก
+                const rolesParam = APP_CONFIG.REQUIRED_ROLES.join(',');
+                const verifyUrl = `${APP_CONFIG.API_URL}?action=verifyToken&token=${encodeURIComponent(tokenToVerify)}&roles=${encodeURIComponent(rolesParam)}`;
+
+                const response = await fetch(verifyUrl);
                 if (!response.ok) throw new Error("API_ERROR");
-                const dbUsers = await response.json();
+                
+                const data = await response.json();
 
-                let matchedUser = null;
-                for (const id in dbUsers) {
-                    if (dbUsers[id].name === requestedUser) {
-                        matchedUser = dbUsers[id];
-                        break;
-                    }
-                }
-
-                if (!matchedUser) {
-                    UI.showError("ข้อมูลผู้ใช้ไม่ถูกต้อง หรือถูกลบออกจากระบบ");
-                    localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
-                    return;
-                }
-
-                const userRoles = Array.isArray(matchedUser.roles) ? matchedUser.roles : [matchedUser.roles];
-                const hasPermission = userRoles.some(role => APP_CONFIG.REQUIRED_ROLES.includes(role));
-
-                if (hasPermission) {
-                    window.currentUser = matchedUser.name;
-                    UI.showApp(matchedUser.name);
-                    AuthGuard.bindEvents();
+                if (data.valid) {
+                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, tokenToVerify);
+                    window.currentUser = data.user.name;
                     
-                    // หลังจากตรวจสอบสิทธิ์ผ่านแล้ว จึงโหลดข้อมูล
+                    UI.showApp(data.user.name);
+                    AuthGuard.bindEvents();
                     await loadInitialData();
                 } else {
-                    UI.showError("คุณไม่มีสิทธิ์ระดับ " + APP_CONFIG.REQUIRED_ROLES.join(', ') + " ในการเข้าถึงแอปพลิเคชันนี้");
+                    let errorMsg = "เซสชันหมดอายุ หรือเซิร์ฟเวอร์ปฏิเสธการเชื่อมต่อ";
+                    if (data.reason === 'permission_denied') {
+                        errorMsg = `คุณไม่มีสิทธิ์ระดับ [${APP_CONFIG.REQUIRED_ROLES.join(', ')}] ในการเข้าถึงแอปพลิเคชันนี้`;
+                    } else if (data.reason === 'invalid_or_expired_token') {
+                        errorMsg = "ข้อมูลการเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบใหม่ผ่าน Portal";
+                    }
+                    
+                    UI.showError(errorMsg);
                     localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
                 }
 
             } catch (error) {
                 console.error("Auth Error:", error);
-                
-                // Fallback สำหรับโหมด Preview หากดึง API สิทธิ์ไม่สำเร็จ
                 const isPreviewEnv = window.self !== window.top || window.location.hostname === "";
                 if (isPreviewEnv) {
                     window.currentUser = "โหมดทดสอบ (API Error)";
@@ -435,7 +437,6 @@
         setTimeout(() => { t.classList.add('closing'); t.addEventListener('animationend', () => t.remove()); }, 4000);
     }
     
-    let confirmCallback = null;
     function showConfirmModal(message, callback) {
         document.getElementById('confirm-message').innerText = message;
         confirmCallback = callback;
@@ -676,12 +677,10 @@
     function addCreatePoItemRow(product = '', qty = '') {
         const container = document.getElementById('create-po-items-container');
         const div = document.createElement('div');
-        // เพิ่ม focus-within:z-50 เพื่อให้บรรทัดที่กำลังพิมพ์อยู่ ลอยอยู่เหนือบรรทัดอื่นเสมอ Dropdown จะได้ไม่โดนทับ
         div.className = "create-po-item-row flex items-center relative bg-white rounded-lg border border-gray-200 mt-2 focus-within:z-50";
         div.innerHTML = `
             <div class="flex-1 relative">
                 <input type="text" class="w-full px-4 py-2.5 text-sm font-medium outline-none rounded-l-lg c-product" placeholder="ชื่อสินค้า..." value="${product}" required autocomplete="off">
-                <!-- ขยาย max-h-40 เป็น max-h-72 เพื่อให้เห็นตัวเลือกเยอะขึ้น และปรับ z-index -->
                 <ul class="suggestion-box absolute z-[60] w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto hidden mt-1 divide-y divide-gray-50 top-full left-0"></ul>
             </div>
             <div class="w-32 border-l border-gray-200">
@@ -861,7 +860,6 @@
                     <span class="text-xs text-gray-400 font-medium">รับ: ${group.ata} โดย ${group.receiver}</span>
                 </div>
                 
-                <!-- เพิ่มแถบ จัดการด่วน (Quick Fill) แทรกไว้ใต้ Header -->
                 <div class="bg-brand-blueLight/30 border-b border-brand-blueLight px-4 py-2 flex flex-col sm:flex-row justify-between sm:items-center gap-2">
                     <span class="text-xs text-brand-blue font-bold flex items-center gap-1">
                         <i data-lucide="zap" class="w-4 h-4"></i> จัดการด่วน (Quick Fill)
@@ -896,7 +894,6 @@
                             <p class="font-bold text-gray-800 text-base">${iIdx+1}. ${item.product} ${isExtra ? '<span class="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded ml-2">สินค้านอกบิล/ของแถม</span>' : ''}</p>
                             <div class="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
                                 <label class="text-xs text-gray-600 font-bold whitespace-nowrap">เลข PO:</label>
-                                <!-- เพิ่ม class po-input-gIdx-${gIdx} เข้าไปเพื่อให้ฟังก์ชัน Quick Fill ดึงไปใช้งาน -->
                                 <input type="text" id="match-item-po-${item.rowNumber}" class="input-field po-input-gIdx-${gIdx} py-1 px-2 text-sm font-bold text-brand-blue border-gray-300 focus:border-brand-blue w-full md:w-40 bg-white" value="${item.poNumber || group.poNumber || ''}" placeholder="ระบุเลข PO">
                             </div>
                         </div>
@@ -1029,7 +1026,6 @@
         }
     }
 
-    // เพิ่มฟังก์ชันสำหรับทำงาน Quick Fill
     function applyQuickFillPO(gIdx) {
         const quickFillValue = document.getElementById(`quick-fill-po-${gIdx}`).value.trim();
         if (!quickFillValue) {
