@@ -286,7 +286,7 @@
     };
 
     // Data API (คนละตัวกับ Auth API)
-    var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3NN7K_xfa80rE9bQOYFbRkjgBAbOm3ONYyfn7veuR1nK6lGTs3aJfbsWR8CYkySo/exec";
+    var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwA1Z2MS6ac_sNrXz3jpX1iHkBj3nY04kcWZdOxgkCGr8sklLgWyLAuq2Ib6wx7x_w/exec";
     
     // เปลี่ยน let เป็น var ป้องกัน SyntaxError: Identifier has already been declared
     var appData = { prList: [], pendingPOs: [], grCompleted: [], apvList: [], vendors: [], products: [] };
@@ -931,7 +931,7 @@
                         </div>
                         
                         <div class="mt-3">
-                            <input type="text" id="match-remark-${item.rowNumber}" class="input-field bg-gray-50 text-sm ${isMatched || isExtra ? '' : 'border-red-300 bg-red-50 text-red-800'}" placeholder="ระบุหมายเหตุสำหรับการตั้งหนี้ (เช่น หักจ่ายตามจริง, ของแถมฟรี)..." value="${isMatched ? '' : (item.remark ? item.remark : '')}">
+                            <input type="text" id="match-remark-${item.rowNumber}" class="input-field bg-gray-50 text-sm ${isMatched || isExtra ? '' : 'border-orange-300 bg-orange-50 text-brand-orange'}" placeholder="ระบุหมายเหตุสำหรับการตั้งหนี้ (ถ้ามี)..." value="${isMatched ? '' : (item.remark ? item.remark : '')}">
                         </div>
                     </div>
                 `;
@@ -1007,9 +1007,10 @@
                     missingPOProduct = item.product;
                 }
 
-                if (originalPoQty > 0 && originalPoQty !== revisedGrQty && remark === '') {
-                    throw new Error(`สินค้ารายการ "${item.product}" มียอดรับไม่ตรงกับที่สั่ง กรุณาระบุหมายเหตุ (เช่น ของแถม, ขาดส่ง)`);
-                }
+                // ปิดการตรวจสอบบังคับใส่หมายเหตุเมื่อจำนวนไม่ตรง
+                // if (originalPoQty > 0 && originalPoQty !== revisedGrQty && remark === '') {
+                //     throw new Error(`สินค้ารายการ "${item.product}" มียอดรับไม่ตรงกับที่สั่ง กรุณาระบุหมายเหตุ (เช่น ของแถม, ขาดส่ง)`);
+                // }
 
                 return { rowNumber: item.rowNumber, revisedGrQty: revisedGrQty, matchRemark: remark, poNumber: itemPoNumber };
             });
