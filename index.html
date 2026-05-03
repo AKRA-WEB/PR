@@ -49,9 +49,7 @@
 </head>
 <body class="text-gray-800 antialiased h-screen flex flex-col leading-relaxed loading-active">
 
-  <!-- ==========================================
-       ส่วนของ Auth UI 
-       ========================================== -->
+  <!-- Auth UI -->
   <div id="auth-loading" class="fixed inset-0 bg-white z-[9999] flex flex-col justify-center items-center">
       <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#171C8F] mb-4"></div>
       <p class="text-[#171C8F] font-medium text-lg">กำลังตรวจสอบสิทธิ์...</p>
@@ -66,9 +64,7 @@
       </div>
   </div>
 
-  <!-- ==========================================
-       เนื้อหาแอปพลิเคชัน
-       ========================================== -->
+  <!-- App Content -->
   <div id="app-content" class="hidden flex-1 flex flex-col h-screen w-full">
       <nav class="bg-brand-blue text-white shadow-md sticky top-0 z-20">
         <div class="max-w-3xl mx-auto px-4 sm:px-6">
@@ -135,6 +131,23 @@
           </form>
         </div>
 
+        <!-- Section: ประวัติที่เพิ่งขอคำสั่งซื้อ (History Database) -->
+        <div class="mt-10 mb-4 flex justify-between items-end px-1 border-b border-gray-200 pb-2">
+            <div>
+                <h2 class="text-lg font-bold text-brand-blue flex items-center gap-1.5">
+                    <i data-lucide="history" class="w-5 h-5"></i> ประวัติคำขอสั่งซื้อ (รวมทุกสาขา)
+                </h2>
+                <p class="text-[11px] text-gray-500 mt-1">รายการล่าสุดจากฐานข้อมูล สามารถติดตามสถานะได้ที่นี่</p>
+            </div>
+            <button type="button" onclick="refreshHistory()" class="text-[11px] text-brand-blue hover:text-[#11146B] font-medium transition bg-brand-blueLight/50 hover:bg-brand-blueLight px-2.5 py-1.5 rounded-md border border-brand-blue/10 shadow-sm flex items-center gap-1">
+                <i data-lucide="refresh-cw" class="w-3 h-3"></i> รีเฟรช
+            </button>
+        </div>
+        
+        <div id="pr-history-container" class="space-y-3">
+            <!-- ประวัติจากเซิร์ฟเวอร์จะถูกนำมาแสดงที่นี่ -->
+        </div>
+
       </main>
   </div>
 
@@ -145,22 +158,19 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    const APP_CONFIG = {
-        // !!! สำคัญมาก: URL ตรงนี้ต้องเป็น URL ของ Web App ตัวที่เป็น Main Menu (Portal) นะครับ 
-        // เพราะมันจะใช้ตรวจ Token ว่ามาจาก Portal จริงๆ
-        API_URL: "https://script.google.com/macros/s/AKfycbxMdnPcafzGl-ekKcttDGWwAfQE1AfQ3L8zssLIF8jvP513ajVvAnAaAtocjboiwqvD/exec", 
+    var APP_CONFIG = {
+        API_URL: "https://script.google.com/macros/s/AKfycbxSomEq-O49vgID_6P-3XfoGuM86rM0dWPQS-ZMsFDvF-_N-O3EkaOS1Cdgg8nkxNfe/exec",
         PORTAL_URL: "https://akra-web.github.io/Main/", 
-        REQUIRED_ROLES: ["ADMIN", "AKRA", "WAREHOUSE", "PURCHASING", "USER"], // ให้ขอได้ทุกคน
+        REQUIRED_ROLES: ["ADMIN", "AKRA", "WAREHOUSE", "PURCHASING", "USER"],
         APP_NAME: "แบบฟอร์มขอซื้อสินค้า (PR)",
-        STORAGE_KEY: "akra_pr_session_token" // เปลี่ยนชื่อ Key เล็กน้อยเพื่อไม่ให้ตีกับระบบเก่า
+        STORAGE_KEY: "akra_pr_session"
     };
 
-    // อันนี้คือ URL สำหรับเก็บ/ดึงข้อมูลสินค้าของระบบ PR (คนละตัวกับ API_URL ข้างบน)
-    const DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw3NN7K_xfa80rE9bQOYFbRkjgBAbOm3ONYyfn7veuR1nK6lGTs3aJfbsWR8CYkySo/exec";
+    var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwA1Z2MS6ac_sNrXz3jpX1iHkBj3nY04kcWZdOxgkCGr8sklLgWyLAuq2Ib6wx7x_w/exec";
     
-    let appData = { products: [] };
+    var appData = { products: [] };
 
-    const UI = {
+    var UI = {
         showLoading: () => {
             document.body.classList.add('loading-active');
             document.getElementById('auth-loading').classList.remove('hidden');
@@ -179,75 +189,84 @@
             document.getElementById('auth-loading').classList.add('hidden');
             document.getElementById('app-content').classList.remove('hidden');
             document.getElementById('display-username').innerText = username;
-            
-            // Auto fill username for PR
             document.getElementById('pr-requester').value = username;
         }
     };
 
-    const AuthGuard = {
+    var AuthGuard = {
         init: async () => {
             lucide.createIcons();
             UI.showLoading();
 
             try {
-                // 1. ดึง Token จาก URL หรือจาก Local Storage
-                const urlParams = new URLSearchParams(window.location.search);
-                const ssoToken = urlParams.get('sso'); 
-                let savedToken = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
-                
-                let tokenToVerify = null;
-
-                if (ssoToken) {
-                    tokenToVerify = ssoToken;
-                    // ลบ Token ออกจาก URL บนแถบ Address Bar เพื่อความสะอาดตาและปลอดภัย
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                } else if (savedToken) {
-                    tokenToVerify = savedToken;
+                // Bypass สำหรับโหมดทดสอบ (Preview)
+                const isPreviewEnv = window.self !== window.top || window.location.hostname === "" || window.location.hostname === "localhost" || window.location.hostname.includes("googleusercontent");
+                if (isPreviewEnv) {
+                    console.log("เข้าสู่โหมดทดสอบ (Preview Mode)");
+                    window.currentUser = "พนักงานขอซื้อ (Preview)";
+                    UI.showApp(window.currentUser);
+                    AuthGuard.bindEvents();
+                    await loadInitialData();
+                    return; 
                 }
 
-                // 2. ถ้าไม่มี Token เลย ให้เด้งกลับไปหน้าหลัก
-                if (!tokenToVerify) {
+                const urlParams = new URLSearchParams(window.location.search);
+                let requestedUser = urlParams.get('user');
+
+                if (requestedUser) {
+                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, requestedUser);
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                } else {
+                    requestedUser = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
+                }
+
+                if (!requestedUser) {
                     window.location.href = APP_CONFIG.PORTAL_URL;
                     return;
                 }
 
-                // 3. ส่ง Token ไปถามเซิร์ฟเวอร์หลัก (Portal) ว่า Token นี้ของจริงและหมดอายุหรือยัง
-                const rolesParam = APP_CONFIG.REQUIRED_ROLES.join(',');
-                const verifyUrl = `${APP_CONFIG.API_URL}?action=verifyToken&token=${encodeURIComponent(tokenToVerify)}&roles=${encodeURIComponent(rolesParam)}`;
-
-                const response = await fetch(verifyUrl);
+                const response = await fetch(`${APP_CONFIG.API_URL}?action=getUsers`);
                 if (!response.ok) throw new Error("API_ERROR");
-                
-                const data = await response.json();
+                const dbUsers = await response.json();
 
-                // 4. ตรวจสอบผลลัพธ์
-                if (data.valid) {
-                    // อนุญาตให้เข้าใช้งาน
-                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, tokenToVerify);
-                    window.currentUser = data.user.name;
-                    
-                    UI.showApp(data.user.name);
+                let matchedUser = null;
+                for (const id in dbUsers) {
+                    if (dbUsers[id].name === requestedUser) {
+                        matchedUser = dbUsers[id];
+                        break;
+                    }
+                }
+
+                if (!matchedUser) {
+                    UI.showError("ข้อมูลผู้ใช้ไม่ถูกต้อง หรือถูกลบออกจากระบบ");
+                    localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+                    return;
+                }
+
+                const userRoles = Array.isArray(matchedUser.roles) ? matchedUser.roles : [matchedUser.roles];
+                const hasPermission = userRoles.some(role => APP_CONFIG.REQUIRED_ROLES.includes(role));
+
+                if (hasPermission) {
+                    window.currentUser = matchedUser.name;
+                    UI.showApp(matchedUser.name);
                     AuthGuard.bindEvents();
-                    
-                    // หลังจากตรวจสอบสิทธิ์ผ่านแล้ว จึงโหลดข้อมูลสินค้า
                     await loadInitialData();
                 } else {
-                    // ไม่อนุญาต กรณี Token หมดอายุ หรือ สิทธิ์ไม่ถึง
-                    let errorMsg = "เซสชันหมดอายุ หรือเซิร์ฟเวอร์ปฏิเสธการเชื่อมต่อ";
-                    if (data.reason === 'permission_denied') {
-                        errorMsg = `คุณไม่มีสิทธิ์ระดับ [${APP_CONFIG.REQUIRED_ROLES.join(', ')}] ในการเข้าถึงแอปพลิเคชันนี้`;
-                    } else if (data.reason === 'invalid_or_expired_token') {
-                        errorMsg = "ข้อมูลการเข้าสู่ระบบหมดอายุ กรุณาเข้าสู่ระบบใหม่ผ่าน Portal";
-                    }
-                    
-                    UI.showError(errorMsg);
+                    UI.showError("คุณไม่มีสิทธิ์ระดับ " + APP_CONFIG.REQUIRED_ROLES.join(', ') + " ในการเข้าถึงแอปพลิเคชันนี้");
                     localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
                 }
 
             } catch (error) {
                 console.error("Auth Error:", error);
-                UI.showError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบสิทธิ์ได้");
+                const isPreviewEnv = window.self !== window.top || window.location.hostname === "";
+                if (isPreviewEnv) {
+                    window.currentUser = "พนักงานขอซื้อ (API Error)";
+                    UI.showApp(window.currentUser);
+                    AuthGuard.bindEvents();
+                    await loadInitialData();
+                } else {
+                    UI.showError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบสิทธิ์ได้");
+                }
             }
         },
 
@@ -300,10 +319,17 @@
 
     async function loadInitialData() {
         showDataLoading('เตรียมความพร้อมระบบ...');
-        const response = await apiCall('getInitialData');
+        
+        // โหลดข้อมูลสินค้าและประวัติไปพร้อมๆ กัน
+        const [initRes, histRes] = await Promise.all([
+            apiCall('getInitialData'),
+            apiCall('getPRHistory')
+        ]);
+
         hideDataLoading();
-        if (response.success) {
-            appData.products = response.products || [];
+
+        if (initRes.success) {
+            appData.products = initRes.products || [];
             const savedWarehouse = localStorage.getItem('pr_warehouse_pref');
             if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
             addEmptyItemRow();
@@ -311,6 +337,83 @@
             showNotification('ไม่สามารถโหลดรายชื่อสินค้าได้ (พิมพ์ชื่อสินค้าเองได้)', 'warning');
             addEmptyItemRow();
         }
+
+        if (histRes.success) {
+            renderHistoryFromServer(histRes.history);
+        }
+    }
+
+    async function refreshHistory() {
+        showDataLoading('กำลังอัปเดตประวัติ...');
+        const histRes = await apiCall('getPRHistory');
+        hideDataLoading();
+        if(histRes.success) {
+            renderHistoryFromServer(histRes.history);
+        } else {
+            showNotification('ไม่สามารถดึงประวัติได้', 'error');
+        }
+    }
+
+    function renderHistoryFromServer(history) {
+        const container = document.getElementById('pr-history-container');
+        if(!container) return;
+        
+        if (!history || history.length === 0) {
+            container.innerHTML = '<div class="bg-white p-6 rounded-xl border border-dashed border-gray-200 text-center text-gray-400 text-sm">ยังไม่มีประวัติการส่งคำขอสั่งซื้อในระบบ</div>';
+            return;
+        }
+
+        // จัดกลุ่มตามเลข PR (เพราะ 1 PR อาจมีหลายรายการสินค้า)
+        const grouped = {};
+        history.forEach(item => {
+            if(!grouped[item.prNumber]) {
+                grouped[item.prNumber] = {
+                    prNumber: item.prNumber,
+                    date: item.date,
+                    requester: item.requester,
+                    warehouse: item.warehouse,
+                    status: item.status,
+                    items: []
+                };
+            }
+            grouped[item.prNumber].items.push(item);
+        });
+
+        const historyArray = Object.values(grouped);
+
+        container.innerHTML = historyArray.map(h => {
+            let statusBadge = '';
+            if(h.status === 'Pending') {
+                statusBadge = '<span class="text-[10px] font-bold text-yellow-600 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="clock" class="w-3 h-3 inline mb-0.5"></i> รอจัดซื้อพิจารณา</span>';
+            } else if(h.status === 'Approved') {
+                statusBadge = '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="check-circle" class="w-3 h-3 inline mb-0.5"></i> อนุมัติ/เปิด PO แล้ว</span>';
+            } else if(h.status === 'Rejected') {
+                statusBadge = '<span class="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="x-circle" class="w-3 h-3 inline mb-0.5"></i> ไม่อนุมัติ</span>';
+            } else {
+                statusBadge = `<span class="text-[10px] font-bold text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap">${h.status}</span>`;
+            }
+
+            const firstItem = h.items[0].product;
+            const moreItems = h.items.length > 1 ? `<span class="text-[11px] text-gray-400 font-medium ml-1">(และอีก ${h.items.length - 1} รายการ)</span>` : '';
+
+            return `
+            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition hover:border-brand-blue/30">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1.5">
+                        <span class="text-[10px] font-bold text-brand-blue bg-brand-blueLight/60 px-2 py-0.5 rounded border border-brand-blue/20">${h.prNumber || 'ไม่ระบุเลข'}</span>
+                        <span class="text-[11px] text-gray-500 font-medium"><i data-lucide="calendar" class="w-3 h-3 inline mb-0.5"></i> ${h.date}</span>
+                    </div>
+                    <p class="text-sm font-semibold text-gray-800">${firstItem} ${moreItems}</p>
+                    <p class="text-[11px] text-gray-500 mt-1">ผู้ขอ: <span class="font-bold text-gray-700">${h.requester}</span> • สาขา/คลัง: <span class="font-bold text-gray-700">${h.warehouse}</span></p>
+                </div>
+                <div class="self-start sm:self-center">
+                    ${statusBadge}
+                </div>
+            </div>
+            `;
+        }).join('');
+        
+        lucide.createIcons();
     }
 
     function updateTotalItemsCount() {
@@ -441,17 +544,22 @@
         const payload = { requester, warehouse, items: itemsToSubmit };
         const res = await apiCall('createPR', payload);
 
-        btn.disabled = false;
-        hideDataLoading();
-
         if(res.success) {
             showNotification('ส่งคำขอสั่งซื้อเรียบร้อยแล้ว!', 'success');
+            
+            // โหลดประวัติใหม่จากเซิร์ฟเวอร์ทันที
+            const histRes = await apiCall('getPRHistory');
+            if(histRes.success) renderHistoryFromServer(histRes.history);
+            
             document.getElementById('pr-items-container').innerHTML = '';
             addEmptyItemRow();
             window.scrollTo(0, 0);
         } else {
             showNotification('เกิดข้อผิดพลาด: ' + (res.message || res.error), 'error');
         }
+        
+        btn.disabled = false;
+        hideDataLoading();
     }
   </script>
 </body>
