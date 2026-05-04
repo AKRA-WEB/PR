@@ -7,6 +7,7 @@
   <title>แบบฟอร์มขอซื้อสินค้า (PR)</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
     tailwind.config = { theme: { extend: { colors: { brand: { blue: '#171C8F', blueLight: '#E8E9F4', orange: '#E35205'} } } } }
@@ -36,6 +37,7 @@
 </head>
 <body class="text-gray-800 antialiased h-screen flex flex-col leading-relaxed loading-active">
 
+  <!-- Auth UI -->
   <div id="auth-loading" class="fixed inset-0 bg-white z-[9999] flex flex-col justify-center items-center">
       <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#171C8F] mb-4"></div>
       <p class="text-[#171C8F] font-medium text-lg">กำลังตรวจสอบสิทธิ์...</p>
@@ -49,6 +51,7 @@
       </div>
   </div>
 
+  <!-- App Content -->
   <div id="app-content" class="hidden flex-1 flex flex-col h-screen w-full">
       <nav class="bg-brand-blue text-white shadow-md sticky top-0 z-20">
         <div class="max-w-3xl mx-auto px-4 sm:px-6">
@@ -115,7 +118,7 @@
                 </h2>
                 <p class="text-[11px] text-gray-500 mt-1">รายการล่าสุดจากฐานข้อมูล สามารถติดตามสถานะได้ที่นี่</p>
             </div>
-            <button type="button" onclick="refreshHistory()" class="text-[11px] text-brand-blue hover:text-[#11146B] font-medium transition bg-brand-blueLight/50 hover:bg-brand-blueLight px-2.5 py-1.5 rounded-md border border-brand-blue/10 shadow-sm flex items-center gap-1">
+            <button type="button" onclick="loadInitialData(true)" class="text-[11px] text-brand-blue hover:text-[#11146B] font-medium transition bg-brand-blueLight/50 hover:bg-brand-blueLight px-2.5 py-1.5 rounded-md border border-brand-blue/10 shadow-sm flex items-center gap-1">
                 <i data-lucide="refresh-cw" class="w-3 h-3"></i> รีเฟรช
             </button>
         </div>
@@ -233,29 +236,49 @@
       } catch (error) { return { success: false, message: 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้' }; }
     }
 
-    async function loadInitialData() {
-        showDataLoading('เตรียมความพร้อมระบบ...');
+    async function loadInitialData(isManualRefresh = false) {
+        // [CACHE FIRST METHOD] โหลดข้อมูลเดิมมาแสดงก่อนทันที
+        const cachedInit = localStorage.getItem('CACHE_PR_INIT_DATA');
+        const cachedHist = localStorage.getItem('CACHE_PR_HIST_DATA');
+        
+        if (cachedInit && cachedHist && !isManualRefresh) {
+            try {
+                appData.products = JSON.parse(cachedInit).products || [];
+                const savedWarehouse = localStorage.getItem('pr_warehouse_pref');
+                if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
+                
+                // ถ้ารายการขอยังว่างอยู่ ให้โหลดแถวเปล่า 1 แถวขึ้นมา
+                if (document.getElementById('pr-items-container').children.length === 0) addEmptyItemRow();
+                
+                renderHistoryFromServer(JSON.parse(cachedHist).history);
+                showNotification('กำลังอัปเดตข้อมูลล่าสุด...', 'warning');
+            } catch(e) { console.error(e); showDataLoading('เตรียมความพร้อมระบบ...'); }
+        } else {
+            showDataLoading('เตรียมความพร้อมระบบ...');
+        }
+
+        // ยิงหลังบ้านเบื้องหลังเพื่อดึงข้อมูลใหม่
         const [initRes, histRes] = await Promise.all([ apiCall('getInitialData'), apiCall('getPRHistory') ]);
-        hideDataLoading();
+        
+        if (!cachedInit || !cachedHist || isManualRefresh) hideDataLoading();
 
         if (initRes.success) {
+            localStorage.setItem('CACHE_PR_INIT_DATA', JSON.stringify(initRes));
             appData.products = initRes.products || [];
-            const savedWarehouse = localStorage.getItem('pr_warehouse_pref');
-            if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
-            addEmptyItemRow();
-        } else {
-            showNotification('ไม่สามารถโหลดรายชื่อสินค้าได้', 'warning');
-            addEmptyItemRow();
+            
+            // วาดแถวเปล่าเฉพาะตอนที่เข้าแอปครั้งแรกและไม่ได้ดึง Cache (กันไม่ให้ไปล้างข้อมูลที่ User กำลังพิมพ์)
+            if (!cachedInit || isManualRefresh) {
+                const savedWarehouse = localStorage.getItem('pr_warehouse_pref');
+                if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
+                document.getElementById('pr-items-container').innerHTML = '';
+                addEmptyItemRow();
+            }
         }
-        if (histRes.success) { renderHistoryFromServer(histRes.history); }
-    }
-
-    async function refreshHistory() {
-        showDataLoading('กำลังอัปเดตประวัติ...');
-        const histRes = await apiCall('getPRHistory');
-        hideDataLoading();
-        if(histRes.success) { renderHistoryFromServer(histRes.history); } 
-        else { showNotification('ไม่สามารถดึงประวัติได้', 'error'); }
+        
+        if (histRes.success) {
+            localStorage.setItem('CACHE_PR_HIST_DATA', JSON.stringify(histRes));
+            renderHistoryFromServer(histRes.history);
+        }
     }
 
     function renderHistoryFromServer(history) {
@@ -373,8 +396,8 @@
                     e.preventDefault(); e.stopPropagation();
                     inputEl.value = p.name;
                     const row = inputEl.closest('.item-row');
-                    row.querySelector('.p-sku-input').value = p.sku || ''; // ดึง SKU อัตโนมัติ
-                    row.querySelector('.p-unit-input').value = p.unit || ''; // ดึงหน่วยอัตโนมัติ
+                    row.querySelector('.p-sku-input').value = p.sku || ''; 
+                    row.querySelector('.p-unit-input').value = p.unit || ''; 
                     row.querySelector('.p-qty-input').focus();
                     suggestionBox.classList.add('hidden');
                 };
@@ -442,7 +465,10 @@
         if(res.success) {
             showNotification('ส่งคำขอสั่งซื้อเรียบร้อยแล้ว!', 'success');
             const histRes = await apiCall('getPRHistory');
-            if(histRes.success) renderHistoryFromServer(histRes.history);
+            if(histRes.success) {
+                localStorage.setItem('CACHE_PR_HIST_DATA', JSON.stringify(histRes));
+                renderHistoryFromServer(histRes.history);
+            }
             
             document.getElementById('pr-items-container').innerHTML = '';
             addEmptyItemRow();
