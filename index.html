@@ -7,12 +7,9 @@
   <title>แบบฟอร์มขอซื้อสินค้า (PR)</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
-    tailwind.config = {
-      theme: { extend: { colors: { brand: { blue: '#171C8F', blueLight: '#E8E9F4', orange: '#E35205'} } } }
-    }
+    tailwind.config = { theme: { extend: { colors: { brand: { blue: '#171C8F', blueLight: '#E8E9F4', orange: '#E35205'} } } } }
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   
@@ -39,12 +36,10 @@
 </head>
 <body class="text-gray-800 antialiased h-screen flex flex-col leading-relaxed loading-active">
 
-  <!-- Auth UI -->
   <div id="auth-loading" class="fixed inset-0 bg-white z-[9999] flex flex-col justify-center items-center">
       <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-[#171C8F] mb-4"></div>
       <p class="text-[#171C8F] font-medium text-lg">กำลังตรวจสอบสิทธิ์...</p>
   </div>
-
   <div id="auth-error" class="fixed inset-0 bg-white z-[9999] hidden flex flex-col justify-center items-center p-6 text-center">
       <div class="bg-red-50 p-8 rounded-2xl max-w-md border border-red-100 shadow-lg">
           <i data-lucide="shield-alert" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
@@ -54,7 +49,6 @@
       </div>
   </div>
 
-  <!-- App Content -->
   <div id="app-content" class="hidden flex-1 flex flex-col h-screen w-full">
       <nav class="bg-brand-blue text-white shadow-md sticky top-0 z-20">
         <div class="max-w-3xl mx-auto px-4 sm:px-6">
@@ -250,7 +244,7 @@
             if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
             addEmptyItemRow();
         } else {
-            showNotification('ไม่สามารถโหลดรายชื่อสินค้าได้ (พิมพ์ชื่อสินค้าเองได้)', 'warning');
+            showNotification('ไม่สามารถโหลดรายชื่อสินค้าได้', 'warning');
             addEmptyItemRow();
         }
         if (histRes.success) { renderHistoryFromServer(histRes.history); }
@@ -264,7 +258,6 @@
         else { showNotification('ไม่สามารถดึงประวัติได้', 'error'); }
     }
 
-    // [SPEED OPTIMIZATION] ใช้ Array Map เพื่อประกอบ HTML ให้ออกมาเป็นก้อนใหญ่ แล้วยัดใส่ DOM ทีเดียว
     function renderHistoryFromServer(history) {
         const container = document.getElementById('pr-history-container');
         if(!container) return;
@@ -307,7 +300,7 @@
         });
         
         container.innerHTML = htmlStr;
-        lucide.createIcons({ root: container }); // สร้าง Icon เฉพาะในกล่องประวัติ
+        lucide.createIcons({ root: container });
     }
 
     function updateTotalItemsCount() {
@@ -321,19 +314,24 @@
         div.className = "item-row bg-gray-50/50 p-4 rounded-xl border border-gray-100 relative";
         div.innerHTML = `
             <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-                <div class="md:col-span-6 relative">
+                <div class="md:col-span-5 relative">
                     <label class="block text-xs font-medium text-gray-500 mb-1">ชื่อสินค้า (Product)</label>
                     <input type="text" class="input-field p-product-input m-0 py-2.5 bg-white font-medium" placeholder="พิมพ์ชื่อสินค้า..." autocomplete="off">
+                    <input type="hidden" class="p-sku-input">
                     <ul class="suggestion-box absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto hidden mt-1 divide-y divide-gray-50"></ul>
                 </div>
-                <div class="grid grid-cols-2 md:grid-cols-6 md:col-span-6 gap-4">
+                <div class="grid grid-cols-3 md:grid-cols-7 md:col-span-7 gap-4">
                     <div class="col-span-1 md:col-span-2">
                         <label class="block text-xs font-medium text-gray-500 mb-1">จำนวน</label>
                         <input type="number" class="input-field p-qty-input m-0 py-2.5 bg-white text-brand-blue font-semibold" placeholder="ระบุเลข" min="1">
                     </div>
-                    <div class="col-span-1 md:col-span-4">
-                        <label class="block text-xs font-medium text-gray-500 mb-1">เหตุผล/หมายเหตุ (ถ้ามี)</label>
-                        <input type="text" class="input-field p-remark-input m-0 py-2.5 bg-white text-gray-600" placeholder="เช่น ของหมด, ด่วนมาก">
+                    <div class="col-span-1 md:col-span-2">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">หน่วย</label>
+                        <input type="text" class="input-field p-unit-input m-0 py-2.5 bg-gray-100 text-gray-600 font-medium cursor-not-allowed" placeholder="-" readonly tabindex="-1">
+                    </div>
+                    <div class="col-span-1 md:col-span-3">
+                        <label class="block text-xs font-medium text-gray-500 mb-1">หมายเหตุ</label>
+                        <input type="text" class="input-field p-remark-input m-0 py-2.5 bg-white text-gray-600" placeholder="เช่น ด่วนมาก">
                     </div>
                 </div>
             </div>
@@ -355,14 +353,13 @@
     }
 
     function setupProductAutocomplete(inputEl) {
-        const suggestionBox = inputEl.nextElementSibling;
+        const suggestionBox = inputEl.nextElementSibling.nextElementSibling;
         inputEl.addEventListener('input', function() {
             const val = this.value.trim().toLowerCase();
             suggestionBox.innerHTML = '';
             if (!val || appData.products.length === 0) { suggestionBox.classList.add('hidden'); return; }
             
-            const normalizedProducts = appData.products.map(p => typeof p === 'string' ? {name: p, unit: ''} : p);
-            const filtered = normalizedProducts.filter(p => p.name.toLowerCase().includes(val)).slice(0, 20);
+            const filtered = appData.products.filter(p => p.name.toLowerCase().includes(val)).slice(0, 20);
             if (filtered.length === 0) { suggestionBox.classList.add('hidden'); return; }
             
             const frag = document.createDocumentFragment();
@@ -376,7 +373,9 @@
                     e.preventDefault(); e.stopPropagation();
                     inputEl.value = p.name;
                     const row = inputEl.closest('.item-row');
-                    if(row.querySelector('.p-qty-input')) row.querySelector('.p-qty-input').focus();
+                    row.querySelector('.p-sku-input').value = p.sku || ''; // ดึง SKU อัตโนมัติ
+                    row.querySelector('.p-unit-input').value = p.unit || ''; // ดึงหน่วยอัตโนมัติ
+                    row.querySelector('.p-qty-input').focus();
                     suggestionBox.classList.add('hidden');
                 };
                 frag.appendChild(li);
@@ -414,12 +413,14 @@
             prodInput.classList.remove('input-error');
             qtyInput.classList.remove('input-error');
 
+            const sku = row.querySelector('.p-sku-input').value.trim();
             const product = prodInput.value.trim();
             const quantity = qtyInput.value.trim();
+            const unit = row.querySelector('.p-unit-input').value.trim();
             const remark = row.querySelector('.p-remark-input').value.trim();
 
             if(product && quantity) {
-                itemsToSubmit.push({ product, quantity, remark });
+                itemsToSubmit.push({ sku, product, quantity, unit, remark });
             } else if (product || quantity) {
                 if(!product) prodInput.classList.add('input-error');
                 if(!quantity) qtyInput.classList.add('input-error');
