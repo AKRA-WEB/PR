@@ -7,7 +7,6 @@
   <title>ระบบจัดซื้อ & APV</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
   <script>
     tailwind.config = {
@@ -202,7 +201,6 @@
                   <div class="relative">
                       <label class="block text-sm font-semibold text-gray-700 mb-2">พิมพ์เลือก Vendor <span class="text-red-500">*</span></label>
                       <input type="text" id="create-po-vendor" required class="input-field bg-brand-blueLight/30 border-brand-blue/20 focus:border-brand-blue" placeholder="ระบุชื่อผู้จำหน่าย..." autocomplete="off">
-                      <!-- แก้ไขจาก max-h-40 เป็น max-h-72 เพื่อให้มองเห็น 5-7 รายการชัดเจน -->
                       <ul id="vendor-suggestions" class="absolute z-50 w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto hidden mt-1 divide-y divide-gray-50 top-full left-0"></ul>
                   </div>
                   <div>
@@ -219,7 +217,6 @@
               <div class="bg-white rounded-xl border border-gray-200 mb-6 pb-2">
                   <h4 class="text-sm font-bold text-gray-800 p-4 border-b border-gray-100 bg-gray-50/50 rounded-t-xl">รายการสินค้า</h4>
                   <div class="p-4">
-                      <!-- ขยาย max-h ให้กล่องใหญ่ขึ้น และเพิ่ม pb-32 เพื่อกันพื้นที่เผื่อให้ Dropdown ของบรรทัดล่างสุดแสดงผลได้ -->
                       <div id="create-po-items-container" class="space-y-3 max-h-[400px] overflow-y-auto pr-2 pb-32"></div>
                       <button type="button" onclick="addCreatePoItemRow()" class="mt-4 w-full border-2 border-dashed border-gray-300 text-brand-blue bg-white hover:bg-gray-50 py-3 rounded-lg text-sm font-bold transition flex justify-center items-center gap-1.5">
                           <i data-lucide="plus" class="w-4 h-4"></i> เพิ่มรายการสินค้า
@@ -262,7 +259,6 @@
         APP_NAME: "ระบบจัดซื้อ (PO)",
         STORAGE_KEY: "akra_po_session_token"
     };
-
     var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwA1Z2MS6ac_sNrXz3jpX1iHkBj3nY04kcWZdOxgkCGr8sklLgWyLAuq2Ib6wx7x_w/exec";
     
     var appData = { prList: [], pendingPOs: [], grCompleted: [], apvList: [], vendors: [], products: [] };
@@ -395,7 +391,6 @@
         setupVendorAutocomplete();
     }
 
-    // --- Autocomplete ---
     function setupVendorAutocomplete() {
         if(isVendorEventsAttached) return;
         const vendorInput = document.getElementById('create-po-vendor'); const vendorSuggestionBox = document.getElementById('vendor-suggestions');
@@ -420,7 +415,7 @@
     }
 
     function setupProductAutocompleteForPO(inputEl) {
-        const suggestionBox = inputEl.nextElementSibling;
+        const suggestionBox = inputEl.nextElementSibling.nextElementSibling;
         inputEl.addEventListener('input', function() {
             const val = this.value.trim().toLowerCase(); suggestionBox.innerHTML = '';
             if (!val || !appData.products || appData.products.length === 0) { suggestionBox.classList.add('hidden'); return; }
@@ -432,8 +427,11 @@
                 li.innerHTML = `<span>${p.name}</span> <span class="text-[10px] text-gray-400 truncate max-w-[120px]">${p.vendor || ''}</span>`;
                 li.onmousedown = function(e) {
                     e.preventDefault(); inputEl.value = p.name;
+                    const row = inputEl.closest('.create-po-item-row');
+                    row.querySelector('.c-sku').value = p.sku || ''; // บันทึก SKU ซ่อนไว้
+                    row.querySelector('.c-unit').value = p.unit || ''; // ดึงหน่วยอัตโนมัติ
                     if (p.vendor) { document.getElementById('create-po-vendor').value = p.vendor; }
-                    inputEl.closest('.create-po-item-row').querySelector('.c-qty').focus();
+                    row.querySelector('.c-qty').focus();
                     suggestionBox.classList.add('hidden');
                 };
                 suggestionBox.appendChild(li);
@@ -449,7 +447,6 @@
         const container = document.getElementById('pr-container');
         if(!appData.prList || appData.prList.length === 0) { container.innerHTML = '<p class="col-span-full text-gray-500 text-center py-10 bg-white rounded-xl border border-dashed">ไม่มีคำขอซื้อใหม่</p>'; return; }
 
-        // [SPEED OPTIMIZATION] Batch DOM insertion
         let htmlStr = '';
         appData.prList.forEach(pr => {
             htmlStr += `
@@ -496,7 +493,7 @@
         document.getElementById('create-po-warehouse').value = pr.warehouse || "";
         
         document.getElementById('create-po-items-container').innerHTML = '';
-        addCreatePoItemRow(pr.product, pr.quantity);
+        addCreatePoItemRow(pr.product, pr.quantity, pr.unit, pr.sku);
 
         document.getElementById('modal-create-po').classList.remove('hidden'); document.getElementById('modal-create-po').classList.add('flex');
     }
@@ -513,18 +510,22 @@
 
     function closeCreatePoModal() { document.getElementById('modal-create-po').classList.add('hidden'); document.getElementById('modal-create-po').classList.remove('flex'); }
 
-    function addCreatePoItemRow(product = '', qty = '') {
+    function addCreatePoItemRow(product = '', qty = '', unit = '', sku = '') {
         const container = document.getElementById('create-po-items-container'); const div = document.createElement('div');
         div.className = "create-po-item-row flex items-center relative bg-white rounded-lg border border-gray-200 mt-2 focus-within:z-50";
         div.innerHTML = `
             <div class="flex-1 relative">
                 <input type="text" class="w-full px-4 py-2.5 text-sm font-medium outline-none rounded-l-lg c-product" placeholder="ชื่อสินค้า..." value="${product}" required autocomplete="off">
+                <input type="hidden" class="c-sku" value="${sku}">
                 <ul class="suggestion-box absolute z-[60] w-full bg-white border border-gray-200 rounded-lg shadow-xl max-h-72 overflow-y-auto hidden mt-1 divide-y divide-gray-50 top-full left-0"></ul>
             </div>
-            <div class="w-32 border-l border-gray-200">
+            <div class="w-24 border-l border-gray-200">
                 <input type="number" class="w-full px-3 py-2.5 text-sm font-bold text-gray-700 outline-none text-center c-qty" placeholder="จำนวน" min="1" value="${qty}" required>
             </div>
-            <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 px-4 py-2.5 font-bold transition border-l border-gray-200 bg-transparent border-none"><i data-lucide="x" class="w-4 h-4"></i></button>
+            <div class="w-20 border-l border-gray-200">
+                <input type="text" class="w-full px-2 py-2.5 text-sm font-medium text-gray-500 bg-gray-50 outline-none text-center c-unit" placeholder="หน่วย" value="${unit}" readonly tabindex="-1">
+            </div>
+            <button type="button" onclick="this.parentElement.remove()" class="text-red-400 hover:text-red-600 px-3 py-2.5 font-bold transition border-l border-gray-200 bg-transparent border-none"><i data-lucide="x" class="w-4 h-4"></i></button>
         `;
         container.appendChild(div);
         setupProductAutocompleteForPO(div.querySelector('.c-product')); lucide.createIcons({root: div});
@@ -537,8 +538,13 @@
 
         const items = []; let hasError = false;
         document.querySelectorAll('.create-po-item-row').forEach(row => {
-            const product = row.querySelector('.c-product').value.trim(); const quantity = row.querySelector('.c-qty').value.trim();
-            if(!product || !quantity) hasError = true; else items.push({ product, quantity });
+            const product = row.querySelector('.c-product').value.trim(); 
+            const quantity = row.querySelector('.c-qty').value.trim();
+            const sku = row.querySelector('.c-sku').value.trim();
+            const unit = row.querySelector('.c-unit').value.trim();
+
+            if(!product || !quantity) hasError = true; 
+            else items.push({ sku, product, quantity, unit });
         });
 
         if(hasError || items.length === 0) return showNotification('กรุณากรอกข้อมูลสินค้าให้ครบถ้วน', 'warning');
