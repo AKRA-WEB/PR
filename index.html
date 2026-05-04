@@ -116,7 +116,7 @@
                 <h2 class="text-lg font-bold text-brand-blue flex items-center gap-1.5">
                     <i data-lucide="history" class="w-5 h-5"></i> ประวัติคำขอสั่งซื้อ (รวมทุกสาขา)
                 </h2>
-                <p class="text-[11px] text-gray-500 mt-1">รายการล่าสุดจากฐานข้อมูล สามารถติดตามสถานะได้ที่นี่</p>
+                <p class="text-[11px] text-gray-500 mt-1">รายการล่าสุดจากฐานข้อมูล สามารถกดเพื่อดูสถานะสินค้ารายชิ้นได้</p>
             </div>
             <button type="button" onclick="loadInitialData(true)" class="text-[11px] text-brand-blue hover:text-[#11146B] font-medium transition bg-brand-blueLight/50 hover:bg-brand-blueLight px-2.5 py-1.5 rounded-md border border-brand-blue/10 shadow-sm flex items-center gap-1">
                 <i data-lucide="refresh-cw" class="w-3 h-3"></i> รีเฟรช
@@ -289,41 +289,122 @@
             return;
         }
 
+        // 1. จัดกลุ่มข้อมูลตาม prNumber
         const grouped = {};
         history.forEach(item => {
-            if(!grouped[item.prNumber]) { grouped[item.prNumber] = { prNumber: item.prNumber, date: item.date, requester: item.requester, warehouse: item.warehouse, status: item.status, items: [] }; }
+            if(!grouped[item.prNumber]) { 
+                grouped[item.prNumber] = { 
+                    prNumber: item.prNumber, 
+                    date: item.date, 
+                    requester: item.requester, 
+                    warehouse: item.warehouse, 
+                    items: [] 
+                }; 
+            }
             grouped[item.prNumber].items.push(item);
         });
 
         const historyArray = Object.values(grouped);
         
         let htmlStr = '';
-        historyArray.forEach(h => {
-            let statusBadge = '';
-            if(h.status === 'Pending') statusBadge = '<span class="text-[10px] font-bold text-yellow-600 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="clock" class="w-3 h-3 inline mb-0.5"></i> รอจัดซื้อพิจารณา</span>';
-            else if(h.status === 'Approved') statusBadge = '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="check-circle" class="w-3 h-3 inline mb-0.5"></i> อนุมัติ/เปิด PO แล้ว</span>';
-            else if(h.status === 'Rejected') statusBadge = '<span class="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="x-circle" class="w-3 h-3 inline mb-0.5"></i> ไม่อนุมัติ</span>';
-            else statusBadge = `<span class="text-[10px] font-bold text-gray-600 bg-gray-50 border border-gray-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap">${h.status}</span>`;
+        historyArray.forEach((h, idx) => {
+            // 2. คำนวณสถานะรวมของบิล (PR)
+            let hasPending = false;
+            let hasApproved = false;
+            let hasRejected = false;
+            
+            h.items.forEach(item => {
+                if(item.status === 'Pending') hasPending = true;
+                if(item.status === 'Approved') hasApproved = true;
+                if(item.status === 'Rejected') hasRejected = true;
+            });
+
+            let overallStatusBadge = '';
+            if (hasPending && !hasApproved && !hasRejected) {
+                overallStatusBadge = '<span class="text-[10px] font-bold text-yellow-600 bg-yellow-50 border border-yellow-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="clock" class="w-3 h-3 inline mb-0.5"></i> รอพิจารณา</span>';
+            } else if (!hasPending && hasApproved && !hasRejected) {
+                overallStatusBadge = '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="check-circle" class="w-3 h-3 inline mb-0.5"></i> อนุมัติครบแล้ว</span>';
+            } else if (!hasPending && !hasApproved && hasRejected) {
+                overallStatusBadge = '<span class="text-[10px] font-bold text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="x-circle" class="w-3 h-3 inline mb-0.5"></i> ไม่อนุมัติทั้งหมด</span>';
+            } else {
+                overallStatusBadge = '<span class="text-[10px] font-bold text-brand-blue bg-brand-blueLight/50 border border-brand-blue/20 px-2 py-1 rounded-md shadow-sm whitespace-nowrap"><i data-lucide="loader" class="w-3 h-3 inline mb-0.5"></i> ทยอยดำเนินการ</span>';
+            }
 
             const firstItem = h.items[0].product;
             const moreItems = h.items.length > 1 ? `<span class="text-[11px] text-gray-400 font-medium ml-1">(และอีก ${h.items.length - 1} รายการ)</span>` : '';
 
-            htmlStr += `
-            <div class="bg-white p-4 rounded-xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition hover:border-brand-blue/30">
-                <div class="flex-1">
-                    <div class="flex items-center gap-2 mb-1.5">
-                        <span class="text-[10px] font-bold text-brand-blue bg-brand-blueLight/60 px-2 py-0.5 rounded border border-brand-blue/20">${h.prNumber || 'ไม่ระบุเลข'}</span>
-                        <span class="text-[11px] text-gray-500 font-medium"><i data-lucide="calendar" class="w-3 h-3 inline mb-0.5"></i> ${h.date}</span>
+            // 3. สร้าง HTML สำหรับรายการสินค้าแยกชิ้น (ที่ซ่อนอยู่ใน Dropdown)
+            let detailsHtml = '<div class="space-y-2 mt-3">';
+            h.items.forEach((item, i) => {
+                let itemStatus = '';
+                if(item.status === 'Pending') itemStatus = '<span class="text-[10px] font-bold text-yellow-600 bg-yellow-50 px-2 py-1 rounded-md border border-yellow-200">รอพิจารณา</span>';
+                else if(item.status === 'Approved') itemStatus = '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">อนุมัติแล้ว</span>';
+                else if(item.status === 'Rejected') itemStatus = '<span class="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-md border border-red-200">ไม่อนุมัติ</span>';
+                else itemStatus = `<span class="text-[10px] font-bold text-gray-600 bg-gray-50 px-2 py-1 rounded-md border border-gray-200">${item.status}</span>`;
+
+                let itemRemark = item.remark ? `<p class="text-[11px] text-gray-500 mt-1">📝 ผู้ขอ: ${item.remark}</p>` : '';
+
+                detailsHtml += `
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-white border border-gray-100 p-3 rounded-lg shadow-sm gap-2 hover:border-brand-blue/30 transition">
+                        <div class="flex-1 pr-3">
+                            <p class="text-sm font-medium text-gray-800">${i+1}. ${item.product}</p>
+                            ${itemRemark}
+                        </div>
+                        <div class="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 sm:gap-3">
+                            <span class="text-sm font-bold text-brand-blue whitespace-nowrap">${item.quantity} ${item.unit || ''}</span>
+                            ${itemStatus}
+                        </div>
                     </div>
-                    <p class="text-sm font-semibold text-gray-800">${firstItem} ${moreItems}</p>
-                    <p class="text-[11px] text-gray-500 mt-1">ผู้ขอ: <span class="font-bold text-gray-700">${h.requester}</span> • สาขา/คลัง: <span class="font-bold text-gray-700">${h.warehouse}</span></p>
+                `;
+            });
+            detailsHtml += '</div>';
+
+            // 4. สร้างการ์ดของ PR หลัก และฝัง detailsHtml ลงไป (ซ่อนไว้ก่อน)
+            htmlStr += `
+            <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm transition hover:shadow-md mb-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer select-none" onclick="togglePRDetails('pr-group-${idx}')">
+                    <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1.5">
+                            <span class="text-[10px] font-bold text-brand-blue bg-brand-blueLight/60 px-2 py-0.5 rounded border border-brand-blue/20">${h.prNumber || 'ไม่ระบุเลข'}</span>
+                            <span class="text-[11px] text-gray-500 font-medium"><i data-lucide="calendar" class="w-3 h-3 inline mb-0.5"></i> ${h.date}</span>
+                        </div>
+                        <p class="text-sm font-semibold text-gray-800">${firstItem} ${moreItems}</p>
+                        <p class="text-[11px] text-gray-500 mt-1">ผู้ขอ: <span class="font-bold text-gray-700">${h.requester}</span> • สาขา/คลัง: <span class="font-bold text-gray-700">${h.warehouse}</span></p>
+                    </div>
+                    <div class="flex items-center justify-between sm:justify-end gap-3 self-stretch sm:self-center">
+                        ${overallStatusBadge}
+                        <div class="bg-gray-50 p-1.5 rounded-full text-gray-400 hover:bg-gray-200 hover:text-gray-700 transition">
+                            <i data-lucide="chevron-down" id="icon-pr-group-${idx}" class="w-4 h-4 transition-transform duration-200"></i>
+                        </div>
+                    </div>
                 </div>
-                <div class="self-start sm:self-center">${statusBadge}</div>
+                
+                <div id="details-pr-group-${idx}" class="hidden mt-4 pt-4 border-t border-gray-100">
+                    <p class="text-xs font-bold text-gray-500 mb-1 flex items-center gap-1.5">
+                        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i> รายการสินค้าทั้งหมด (${h.items.length} รายการ)
+                    </p>
+                    <div class="bg-gray-50/50 p-2 rounded-xl border border-gray-100">
+                        ${detailsHtml}
+                    </div>
+                </div>
             </div>`;
         });
         
         container.innerHTML = htmlStr;
         lucide.createIcons({ root: container });
+    }
+
+    // ฟังก์ชันสำหรับเปิด/ปิด Dropdown รายละเอียดบิล
+    function togglePRDetails(groupId) {
+        const detailsDiv = document.getElementById(`details-${groupId}`);
+        const icon = document.getElementById(`icon-${groupId}`);
+        if (detailsDiv.classList.contains('hidden')) {
+            detailsDiv.classList.remove('hidden');
+            icon.classList.add('rotate-180');
+        } else {
+            detailsDiv.classList.add('hidden');
+            icon.classList.remove('rotate-180');
+        }
     }
 
     function updateTotalItemsCount() {
