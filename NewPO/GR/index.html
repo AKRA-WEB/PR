@@ -182,7 +182,7 @@
         STORAGE_KEY: "akra_gr_session"
     };
 
-    var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzDMyXnaCarlg8KRlu7GAO3A7zuYROfX8yGXHj63ye_WR7Egkdw5FT76OJP601y2Gk/exec";
+    var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw8SMnMPX9Cs7VDj-tkr-Vo9LTs4e2SEEg4OWr616VcM6Nz6IBWxRjxMPkBRG05yhA/exec";
     
     var appData = { products: [], pendingPOs: [] };
     var groupedPOs = []; 
@@ -523,7 +523,7 @@
         group.items.forEach((item, i) => {
             const isSavedData = item.status === 'Draft GR' || item.status === 'Pending Review';
             htmlStr += `
-            <div class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm po-item-row hover:border-brand-blue/30 transition" data-rownum="${item.rowNumber}">
+            <div class="border border-gray-200 rounded-xl p-4 bg-white shadow-sm po-item-row hover:border-brand-blue/30 transition" data-rownum="${item.rowNumber}" data-uid="${item.uid}">
                 <div class="flex justify-between items-start mb-3 border-b border-gray-100 pb-2">
                     <div class="font-bold text-gray-800 flex-1 pr-2 flex items-center gap-2 text-sm">
                         <span class="text-brand-blue bg-brand-blueLight/50 px-2 py-0.5 rounded">${i+1}</span>
@@ -662,6 +662,7 @@
       const poItemsData = [];
       document.querySelectorAll('.po-item-row').forEach(row => {
           const rowNum = row.dataset.rownum;
+          const uid = row.dataset.uid;
           const qtyInput = row.querySelector('.po-qty'); const locInput = row.querySelector('.po-loc');
           qtyInput.classList.remove('input-error'); locInput.classList.remove('input-error');
 
@@ -670,9 +671,9 @@
 
           if (grQty && parseFloat(grQty) > 0) {
               if (!isDraft && !locIn) { locInput.classList.add('input-error'); formHasError = true; }
-              poItemsData.push({ rowNumber: rowNum, grQty, unit, locIn, exp, oldStock });
+              poItemsData.push({ rowNumber: rowNum, uid: uid, grQty, unit, locIn, exp, oldStock });
           } else if (isDraft) {
-              poItemsData.push({ rowNumber: rowNum, grQty: "", unit, locIn, exp, oldStock });
+              poItemsData.push({ rowNumber: rowNum, uid: uid, grQty: "", unit, locIn, exp, oldStock });
           }
       });
 
