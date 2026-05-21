@@ -1,4 +1,4 @@
-const SPREADSHEET_ID = "1vkYB2a4MRw7MWjml-fneEMgPCptbGyQlRY3WweoWHe4"; 
+const SPREADSHEET_ID = "1iJlJM1Lb2grWBpahpYjwIABTtSHqSdDHXHPxO34b_Z4"; 
 
 // ==========================================
 // 1. API Routing (รับส่งข้อมูลกับหน้าบ้าน)
@@ -16,6 +16,7 @@ function doPost(e) {
     else if (action === 'approvePR') result = approvePR(data);
     else if (action === 'rejectPR') result = rejectPR(data);
     else if (action === 'createPO') result = createPO(data); 
+    else if (action === 'updatePO') result = updatePO(data);
     else if (action === 'bulkReceivePO') result = bulkReceivePO(data);
     else if (action === 'closePO') result = closePO(data);
     else if (action === 'deletePO') result = deletePO(data);
@@ -45,6 +46,24 @@ function setupDatabase(ss) {
       sh.getRange("A1:" + String.fromCharCode(64 + sheets[name].length) + "1").setBackground("#171C8F").setFontColor("white").setFontWeight("bold");
     }
   }
+}
+
+/**
+ * ค้นหาเลขแถวจาก UID เพื่อป้องกันปัญหาการสลับแถว (Race Condition)
+ * @param {GoogleAppsScript.Spreadsheet.Sheet} sheet 
+ * @param {number} colIndex 1-based index ของคอลัมน์ UID (ปกติคือ 1)
+ * @param {string} uid 
+ * @returns {number} เลขแถวที่พบ หรือ -1 ถ้าไม่พบ
+ */
+function findRowByUid(sheet, colIndex, uid) {
+  if (!uid) return -1;
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) return -1;
+  const data = sheet.getRange(2, colIndex, lastRow - 1, 1).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if (data[i][0] === uid) return i + 2;
+  }
+  return -1;
 }
 
 // ==========================================
@@ -188,7 +207,7 @@ function createPR(data) {
   const prNumber = "PR-" + Utilities.formatDate(today, Session.getScriptTimeZone(), "yyyyMMdd") + "-" + Math.floor(1000+Math.random()*9000);
   
   const newRows = data.items.map(item => [
-    Utilities.generateUuid(), today, prNumber, data.requester, data.warehouse, 
+    Utilities.getUuid(), today, prNumber, data.requester, data.warehouse, 
     item.sku || "", item.product, item.quantity, item.unit || "", item.remark || "", "Pending", ""
   ]);
   
@@ -201,7 +220,14 @@ function rejectPR(data) {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const prSheet = ss.getSheetByName('PR');
     
-    let rowData = prSheet.getRange(data.rowNumber, 10, 1, 2).getValues()[0];
+    // ค้นหาแถวจาก UID (แทนการเชื่อ rowNumber ที่ส่งมา)
+    let rowNumber = findRowByUid(prSheet, 1, data.prUid || data.uid);
+    if (rowNumber === -1) {
+       // Fallback เพื่อความยืดหยุ่น ถ้ายังไม่ได้ส่ง UID มา หรือหาไม่เจอ
+       rowNumber = data.rowNumber; 
+    }
+
+    let rowData = prSheet.getRange(rowNumber, 10, 1, 2).getValues()[0];
     let currentRemark = rowData[0];
     let newRemark = currentRemark ? `${currentRemark}\n${data.remark}` : data.remark;
     let targetStatus = data.status || "Rejected";
@@ -222,15 +248,21 @@ function approvePR(data) {
   const prSheet = ss.getSheetByName('PR');
   const poSheet = ss.getSheetByName('PO');
   
-  const prData = prSheet.getRange(data.prRowNumber, 1, 1, 3).getValues()[0];
+  // ค้นหาแถวจาก UID (แทนการเชื่อ prRowNumber ที่ส่งมา)
+  let rowNumber = findRowByUid(prSheet, 1, data.prUid || data.uid);
+  if (rowNumber === -1) {
+     rowNumber = data.prRowNumber; 
+  }
+
+  const prData = prSheet.getRange(rowNumber, 1, 1, 3).getValues()[0];
   const prUid = prData[0];
   const prNumber = prData[2];
   
-  prSheet.getRange(data.prRowNumber, 11).setValue("Approved"); 
+  prSheet.getRange(rowNumber, 11).setValue("Approved"); 
 
   const today = new Date();
   const newRows = data.items.map(item => [
-    Utilities.generateUuid(), prUid, today, data.poNumber || "", data.vendor, data.warehouse,
+    Utilities.getUuid(), prUid, today, data.poNumber || "", data.vendor, data.warehouse,
     item.sku || "", item.product, item.quantity, item.unit || "", "", "Pending GR", `อ้างอิง PR: ${prNumber}`
   ]);
   
@@ -244,7 +276,7 @@ function createPO(data) {
   const today = new Date();
   
   const newRows = data.items.map(item => [
-    Utilities.generateUuid(), "DIRECT", today, data.poNumber || "", data.vendor, data.warehouse,
+    Utilities.getUuid(), "DIRECT", today, data.poNumber || "", data.vendor, data.warehouse,
     item.sku || "", item.product, item.quantity, item.unit || "", "", "Pending GR", "Direct PO"
   ]);
   
@@ -252,11 +284,67 @@ function createPO(data) {
   return { success: true, message: "สร้าง Direct PO สำเร็จ" };
 }
 
+function updatePO(data) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const poSheet = ss.getSheetByName('PO');
+    const today = new Date();
+
+    // 1. ลบรายการเก่าทิ้ง
+    if (data.oldPoUids && data.oldPoUids.length > 0) {
+      let rowsToDelete = [];
+      data.oldPoUids.forEach(uid => {
+        let r = findRowByUid(poSheet, 1, uid);
+        if (r !== -1) rowsToDelete.push(r);
+      });
+      // ลบจากล่างขึ้นบนเพื่อไม่ให้เลขแถวเคลื่อน
+      rowsToDelete.sort((a, b) => b - a);
+      rowsToDelete.forEach(row => poSheet.deleteRow(row));
+    }
+
+    // 2. แทรกรายการใหม่ (ใช้รหัส PO เดิม ถ้ามี)
+    const newRows = data.items.map(item => [
+      Utilities.getUuid(), 
+      data.prUid || "DIRECT", 
+      today, 
+      data.poNumber || "", 
+      data.vendor, 
+      data.warehouse,
+      item.sku || "", 
+      item.product, 
+      item.quantity, 
+      item.unit || "", 
+      "", 
+      "Pending GR", 
+      data.prUid ? "Ref PR" : "Direct PO (Edited)"
+    ]);
+
+    if (newRows.length > 0) {
+      poSheet.getRange(poSheet.getLastRow() + 1, 1, newRows.length, newRows[0].length).setValues(newRows);
+    }
+
+    return { success: true, message: "อัปเดตข้อมูลบิลสั่งซื้อเรียบร้อยแล้ว" };
+  } catch (error) {
+    return { success: false, message: "อัปเดตไม่สำเร็จ", errorDetail: error.toString() };
+  }
+}
+
 function deletePO(data) {
     try {
         const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
         const poSheet = ss.getSheetByName('PO');
-        const rowsToDelete = data.rowNumbers.sort((a, b) => b - a); 
+        
+        let rowsToDelete = [];
+        if (data.poUids) {
+            data.poUids.forEach(uid => {
+                let r = findRowByUid(poSheet, 1, uid);
+                if (r !== -1) rowsToDelete.push(r);
+            });
+        } else {
+            rowsToDelete = data.rowNumbers;
+        }
+
+        rowsToDelete.sort((a, b) => b - a); 
         rowsToDelete.forEach(row => poSheet.deleteRow(row));
         return { success: true, message: `ลบบิล PO เรียบร้อยแล้ว` };
     } catch(e) {
@@ -292,13 +380,19 @@ function bulkReceivePO(data) {
   let itemCounter = 1;
 
   data.items.forEach(item => {
-    let poRow = parseInt(item.rowNumber); 
+    // ค้นหาแถวจาก UID (ป้องกันการสลับบรรทัด)
+    let poRow = findRowByUid(poSheet, 1, item.uid);
+    if (poRow === -1) {
+       // Fallback กรณีหาไม่เจอหรือหน้ากากยังไม่ส่ง UID มา
+       poRow = parseInt(item.rowNumber); 
+    }
+
     let poUid = poSheet.getRange(poRow, 1).getValue(); 
     let poSku = poSheet.getRange(poRow, 7).getValue(); 
     let productName = poSheet.getRange(poRow, 8).getValue(); 
 
     grRowsToInsert.push([
-      Utilities.generateUuid(), poUid, today, ataDate, data.receiverName, poSku, productName, 
+      Utilities.getUuid(), poUid, today, ataDate, data.receiverName, poSku, productName, 
       item.grQty, item.unit, item.locIn, item.exp, leadtimeDays, data.remark, data.targetStatus, item.oldStock || ""
     ]);
 
@@ -316,7 +410,7 @@ function bulkReceivePO(data) {
   if (data.extraItems && data.extraItems.length > 0) {
     data.extraItems.forEach(ex => {
       grRowsToInsert.push([
-        Utilities.generateUuid(), "EXTRA", today, ataDate, data.receiverName, ex.sku || "", ex.product, 
+        Utilities.getUuid(), "EXTRA", today, ataDate, data.receiverName, ex.sku || "", ex.product, 
         ex.grQty, ex.unit, ex.locIn, ex.exp, leadtimeDays, "[นอกบิล/ของแถม] " + data.remark, data.targetStatus, ex.oldStock || ""
       ]);
       
@@ -418,23 +512,29 @@ function sendLineMessageAPI(textMessage, type = 'REVIEW') {
 function closePO(data) {
   try {
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    const trackingSheet = ss.getSheetByName('TrackingPO');
+    const trackingSheet = ss.getSheetByName('PO');
     
     if (!data.items || data.items.length === 0) {
       return { success: false, message: "ไม่มีรายการที่ต้องอัปเดต" };
     }
 
     data.items.forEach(item => {
-      if (item.poNumber) {
-        trackingSheet.getRange(item.rowNumber, 3).setValue(item.poNumber);
+      // ค้นหาแถวจาก UID
+      let rowNumber = findRowByUid(trackingSheet, 1, item.uid);
+      if (rowNumber === -1) {
+          rowNumber = item.rowNumber; 
       }
-      trackingSheet.getRange(item.rowNumber, 10).setValue(item.revisedGrQty);
-      trackingSheet.getRange(item.rowNumber, 12).setValue("PO Closed - Ready for APV");
+
+      if (item.poNumber) {
+        trackingSheet.getRange(rowNumber, 4).setValue(item.poNumber);
+      }
+      trackingSheet.getRange(rowNumber, 9).setValue(item.revisedGrQty);
+      trackingSheet.getRange(rowNumber, 12).setValue("PO Closed - Ready for APV");
       
       if (item.matchRemark) {
-        let currentRemark = trackingSheet.getRange(item.rowNumber, 14).getValue();
+        let currentRemark = trackingSheet.getRange(rowNumber, 13).getValue();
         let newRemark = currentRemark ? currentRemark + " | [Match]: " + item.matchRemark : "[Match]: " + item.matchRemark;
-        trackingSheet.getRange(item.rowNumber, 14).setValue(newRemark);
+        trackingSheet.getRange(rowNumber, 13).setValue(newRemark);
       }
     });
 
