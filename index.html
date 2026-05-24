@@ -1,3 +1,4 @@
+<!-- GitHub Repo: https://github.com/AKRA-WEB/PR -->
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -219,6 +220,9 @@
 
     function showDataLoading(text = 'กำลังโหลด...') { document.getElementById('data-loader-text').innerText = text; document.getElementById('data-loader').classList.remove('hidden'); document.getElementById('data-loader').classList.add('flex'); }
     function hideDataLoading() { document.getElementById('data-loader').classList.add('hidden'); document.getElementById('data-loader').classList.remove('flex'); }
+    const PR_CACHE_TTL = 10 * 60 * 1000;
+    function getCache(key, ttlMs) { try { const raw = localStorage.getItem(key); if (!raw) return null; const w = JSON.parse(raw); if (Date.now() - (w._ts||0) > ttlMs) { localStorage.removeItem(key); return null; } return w._d; } catch(e) { localStorage.removeItem(key); return null; } }
+    function setCache(key, data) { localStorage.setItem(key, JSON.stringify({ _ts: Date.now(), _d: data })); }
     function showNotification(msg, type='success') {
         const c = document.getElementById('toast-container'); if(!c) return;
         const t = document.createElement('div'); t.className = `toast ${type}`;
@@ -238,19 +242,19 @@
 
     async function loadInitialData(isManualRefresh = false) {
         // [CACHE FIRST METHOD] โหลดข้อมูลเดิมมาแสดงก่อนทันที
-        const cachedInit = localStorage.getItem('CACHE_PR_INIT_DATA');
-        const cachedHist = localStorage.getItem('CACHE_PR_HIST_DATA');
-        
+        const cachedInit = getCache('CACHE_PR_INIT_DATA', PR_CACHE_TTL);
+        const cachedHist = getCache('CACHE_PR_HIST_DATA', PR_CACHE_TTL);
+
         if (cachedInit && cachedHist && !isManualRefresh) {
             try {
-                appData.products = JSON.parse(cachedInit).products || [];
+                appData.products = cachedInit.products || [];
                 const savedWarehouse = localStorage.getItem('pr_warehouse_pref');
                 if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
-                
+
                 // ถ้ารายการขอยังว่างอยู่ ให้โหลดแถวเปล่า 1 แถวขึ้นมา
                 if (document.getElementById('pr-items-container').children.length === 0) addEmptyItemRow();
-                
-                renderHistoryFromServer(JSON.parse(cachedHist).history);
+
+                renderHistoryFromServer(cachedHist.history);
                 showNotification('กำลังอัปเดตข้อมูลล่าสุด...', 'warning');
             } catch(e) { console.error(e); showDataLoading('เตรียมความพร้อมระบบ...'); }
         } else {
@@ -263,7 +267,7 @@
         if (!cachedInit || !cachedHist || isManualRefresh) hideDataLoading();
 
         if (initRes.success) {
-            localStorage.setItem('CACHE_PR_INIT_DATA', JSON.stringify(initRes));
+            setCache('CACHE_PR_INIT_DATA', initRes);
             appData.products = initRes.products || [];
             
             // วาดแถวเปล่าเฉพาะตอนที่เข้าแอปครั้งแรกและไม่ได้ดึง Cache (กันไม่ให้ไปล้างข้อมูลที่ User กำลังพิมพ์)
@@ -276,7 +280,7 @@
         }
         
         if (histRes.success) {
-            localStorage.setItem('CACHE_PR_HIST_DATA', JSON.stringify(histRes));
+            setCache('CACHE_PR_HIST_DATA', histRes);
             renderHistoryFromServer(histRes.history);
         }
     }
@@ -561,7 +565,7 @@
             // ปล่อยให้ประวัติดึงข้อมูลแบบ Background
             apiCall('getPRHistory').then(histRes => {
                 if(histRes.success) {
-                    localStorage.setItem('CACHE_PR_HIST_DATA', JSON.stringify(histRes));
+                    setCache('CACHE_PR_HIST_DATA', histRes);
                     renderHistoryFromServer(histRes.history);
                 }
             });
