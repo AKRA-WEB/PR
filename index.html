@@ -136,6 +136,25 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
+    const CURRENT_VERSION = "20260602.01";
+    async function checkAppVersion() {
+        try {
+            const res = await fetch('version.json?t=' + Date.now());
+            if (!res.ok) return true;
+            const config = await res.json();
+            if (config && config.version && config.version !== CURRENT_VERSION) {
+                alert('พบเวอร์ชันใหม่ กำลังอัปเดตระบบ...');
+                const url = new URL(window.location.href);
+                url.searchParams.set('update', Date.now());
+                window.location.replace(url.toString());
+                return false;
+            }
+        } catch (e) {
+            console.warn('Version check skipped:', e);
+        }
+        return true;
+    }
+
     var APP_CONFIG = {
         API_URL: "https://script.google.com/macros/s/AKfycbwv2oGqYocA-k-EN2qjs_rf64gc9kDCG2o2nIKlAW0BDCT0rXLvcgLurCRaQXjuC-OG/exec",
         PORTAL_URL: "https://akra-web.github.io/Main/", 
@@ -154,6 +173,9 @@
 
     var AuthGuard = {
         init: async () => {
+            const isVersionOk = await checkAppVersion();
+            if (!isVersionOk) return;
+
             lucide.createIcons();
             UI.showLoading();
             try {
