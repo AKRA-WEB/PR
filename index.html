@@ -136,7 +136,7 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    const CURRENT_VERSION = "20260614.01";
+    const CURRENT_VERSION = "20260621.01";
     async function checkAppVersion() {
         try {
             const res = await fetch('version.json?t=' + Date.now());
@@ -355,11 +355,18 @@
     const PR_CACHE_TTL = 10 * 60 * 1000;
     function getCache(key, ttlMs) { try { const raw = localStorage.getItem(key); if (!raw) return null; const w = JSON.parse(raw); if (Date.now() - (w._ts||0) > ttlMs) { localStorage.removeItem(key); return null; } return w._d; } catch(e) { localStorage.removeItem(key); return null; } }
     function setCache(key, data) { localStorage.setItem(key, JSON.stringify({ _ts: Date.now(), _d: data })); }
+    function esc(v) {
+        if (v === null || v === undefined) return '';
+        return String(v).replace(/[&<>"']/g, function(c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
     function showNotification(msg, type='success') {
         const c = document.getElementById('toast-container'); if(!c) return;
         const t = document.createElement('div'); t.className = `toast ${type}`;
         let icon = type === 'success' ? `<i data-lucide="check-circle" class="w-6 h-6 text-emerald-500 flex-shrink-0"></i>` : (type === 'warning' ? `<i data-lucide="alert-triangle" class="w-6 h-6 text-yellow-500 flex-shrink-0"></i>` : `<i data-lucide="x-circle" class="w-6 h-6 text-red-500 flex-shrink-0"></i>`);
-        t.innerHTML = `${icon}<div class="flex-1"><p class="text-sm font-medium text-gray-800">${msg}</p></div>`;
+        t.innerHTML = `${icon}<div class="flex-1"><p class="text-sm font-medium text-gray-800">${esc(msg)}</p></div>`;
         c.appendChild(t); lucide.createIcons({root: t});
         setTimeout(() => { t.classList.add('closing'); t.addEventListener('animationend', () => t.remove()); }, 4000);
     }
@@ -480,18 +487,18 @@
                 else if(item.status === 'Approved') itemStatus = '<span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-200">อนุมัติแล้ว</span>';
                 else if(item.status === 'Rejected') itemStatus = '<span class="text-[10px] font-bold text-red-600 bg-red-50 px-2 py-1 rounded-md border border-red-200">ไม่อนุมัติ</span>';
                 else if(item.status === 'ซื้อให้แล้ว') itemStatus = '<span class="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded-md border border-purple-200">⚡ ซื้อให้แล้ว</span>';
-                else itemStatus = `<span class="text-[10px] font-bold text-gray-600 bg-gray-50 px-2 py-1 rounded-md border border-gray-200">${item.status}</span>`;
+                else itemStatus = `<span class="text-[10px] font-bold text-gray-600 bg-gray-50 px-2 py-1 rounded-md border border-gray-200">${esc(item.status)}</span>`;
 
-                let itemRemark = item.remark ? `<p class="text-[11px] text-gray-500 mt-1">📝 ผู้ขอ: ${item.remark}</p>` : '';
+                let itemRemark = item.remark ? `<p class="text-[11px] text-gray-500 mt-1">📝 ผู้ขอ: ${esc(item.remark)}</p>` : '';
 
                 detailsHtml += `
                     <div class="flex flex-col sm:flex-row sm:items-center justify-between bg-white border border-gray-100 p-3 rounded-lg shadow-sm gap-2 hover:border-brand-blue/30 transition">
                         <div class="flex-1 pr-3">
-                            <p class="text-sm font-medium text-gray-800">${i+1}. ${item.product}</p>
+                            <p class="text-sm font-medium text-gray-800">${i+1}. ${esc(item.product)}</p>
                             ${itemRemark}
                         </div>
                         <div class="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 sm:gap-3">
-                            <span class="text-sm font-bold text-brand-blue whitespace-nowrap">${item.quantity} ${item.unit || ''}</span>
+                            <span class="text-sm font-bold text-brand-blue whitespace-nowrap">${esc(item.quantity)} ${esc(item.unit || '')}</span>
                             ${itemStatus}
                         </div>
                     </div>
@@ -505,11 +512,11 @@
                 <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer select-none" onclick="togglePRDetails('pr-group-${idx}')">
                     <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1.5">
-                            <span class="text-[10px] font-bold text-brand-blue bg-brand-blueLight/60 px-2 py-0.5 rounded border border-brand-blue/20">${h.prNumber || 'ไม่ระบุเลข'}</span>
-                            <span class="text-[11px] text-gray-500 font-medium"><i data-lucide="calendar" class="w-3 h-3 inline mb-0.5"></i> ${h.date}</span>
+                            <span class="text-[10px] font-bold text-brand-blue bg-brand-blueLight/60 px-2 py-0.5 rounded border border-brand-blue/20">${esc(h.prNumber || 'ไม่ระบุเลข')}</span>
+                            <span class="text-[11px] text-gray-500 font-medium"><i data-lucide="calendar" class="w-3 h-3 inline mb-0.5"></i> ${esc(h.date)}</span>
                         </div>
-                        <p class="text-sm font-semibold text-gray-800">${firstItem} ${moreItems}</p>
-                        <p class="text-[11px] text-gray-500 mt-1">ผู้ขอ: <span class="font-bold text-gray-700">${h.requester}</span> • สาขา/คลัง: <span class="font-bold text-gray-700">${h.warehouse}</span></p>
+                        <p class="text-sm font-semibold text-gray-800">${esc(firstItem)} ${moreItems}</p>
+                        <p class="text-[11px] text-gray-500 mt-1">ผู้ขอ: <span class="font-bold text-gray-700">${esc(h.requester)}</span> • สาขา/คลัง: <span class="font-bold text-gray-700">${esc(h.warehouse)}</span></p>
                     </div>
                     <div class="flex items-center justify-between sm:justify-end gap-3 self-stretch sm:self-center">
                         ${overallStatusBadge}
@@ -610,8 +617,8 @@
             filtered.forEach(p => {
                 const li = document.createElement('li');
                 li.className = 'px-3 py-2.5 hover:bg-brand-blueLight active:bg-brand-blue/10 cursor-pointer text-sm font-medium text-gray-700 transition flex justify-between items-start gap-2';
-                const unitBadge = p.unit ? `<span class="text-[10px] text-brand-blue bg-brand-blueLight px-1.5 py-0.5 rounded border border-brand-blue/20 whitespace-nowrap mt-0.5">${p.unit}</span>` : '';
-                li.innerHTML = `<span class="leading-tight break-words">${p.name}</span> ${unitBadge}`;
+                const unitBadge = p.unit ? `<span class="text-[10px] text-brand-blue bg-brand-blueLight px-1.5 py-0.5 rounded border border-brand-blue/20 whitespace-nowrap mt-0.5">${esc(p.unit)}</span>` : '';
+                li.innerHTML = `<span class="leading-tight break-words">${esc(p.name)}</span> ${unitBadge}`;
                 
                 li.onmousedown = function(e) {
                     e.preventDefault(); e.stopPropagation();
