@@ -272,7 +272,7 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    const CURRENT_VERSION = "20260914.02";
+    const CURRENT_VERSION = "20260914.03";
     async function checkAppVersion() {
         try {
             const res = await fetch('version.json?t=' + Date.now());
@@ -420,7 +420,7 @@
         init: async () => {
             const isVersionOk = await checkAppVersion();
             if (!isVersionOk) return;
-            AppVersionGuard.start({ current: CURRENT_VERSION, readActions: ['getInitialData', 'getPRHistory'] });
+            AppVersionGuard.start({ current: CURRENT_VERSION, readActions: ['getInitialData', 'getProducts', 'getPRHistory'] });
 
             lucide.createIcons();
             UI.showLoading();
@@ -490,7 +490,15 @@
     function hideDataLoading() { document.getElementById('data-loader').classList.add('hidden'); document.getElementById('data-loader').classList.remove('flex'); }
     const PR_CACHE_TTL = 10 * 60 * 1000;
     function getCache(key, ttlMs) { try { const raw = localStorage.getItem(key); if (!raw) return null; const w = JSON.parse(raw); if (Date.now() - (w._ts||0) > ttlMs) { localStorage.removeItem(key); return null; } return w._d; } catch(e) { localStorage.removeItem(key); return null; } }
-    function setCache(key, data) { localStorage.setItem(key, JSON.stringify({ _ts: Date.now(), _d: data })); }
+    function setCache(key, data) {
+        try {
+            localStorage.setItem(key, JSON.stringify({ _ts: Date.now(), _d: data }));
+            return true;
+        } catch (error) {
+            // Cached data is optional; a full origin must not block a successful read.
+            return false;
+        }
+    }
     function esc(v) {
         if (v === null || v === undefined) return '';
         return String(v).replace(/[&<>"']/g, function(c) {
@@ -517,6 +525,7 @@
     }
 
     async function loadInitialData(isManualRefresh = false) {
+      try {
         // [CACHE FIRST METHOD] โหลดข้อมูลเดิมมาแสดงก่อนทันที
         const cachedInit = getCache('CACHE_PR_INIT_DATA', PR_CACHE_TTL);
         const cachedHist = getCache('CACHE_PR_HIST_DATA', PR_CACHE_TTL);
@@ -538,12 +547,12 @@
         }
 
         // ยิงหลังบ้านเบื้องหลังเพื่อดึงข้อมูลใหม่
-        const [initRes, histRes] = await Promise.all([ apiCall('getInitialData'), apiCall('getPRHistory') ]);
+        const [initRes, histRes] = await Promise.all([ apiCall('getProducts'), apiCall('getPRHistory') ]);
         
         if (!cachedInit || !cachedHist || isManualRefresh) hideDataLoading();
 
         if (initRes.success) {
-            setCache('CACHE_PR_INIT_DATA', initRes);
+            setCache('CACHE_PR_INIT_DATA', { products: initRes.products || [] });
             appData.products = initRes.products || [];
             
             // วาดแถวเปล่าเฉพาะตอนที่เข้าแอปครั้งแรกและไม่ได้ดึง Cache (กันไม่ให้ไปล้างข้อมูลที่ User กำลังพิมพ์)
@@ -559,6 +568,13 @@
             setCache('CACHE_PR_HIST_DATA', histRes);
             renderHistoryFromServer(histRes.history);
         }
+        if (!initRes.success || !histRes.success) showNotification('โหลดข้อมูลบางส่วนไม่สำเร็จ กรุณารีเฟรชเพื่อลองอีกครั้ง', 'error');
+      } catch (error) {
+        console.error('PR data load error:', error);
+        showNotification('โหลดข้อมูลไม่สำเร็จ กรุณารีเฟรชเพื่อลองอีกครั้ง', 'error');
+      } finally {
+        hideDataLoading();
+      }
     }
 
     function renderHistoryFromServer(history) {
