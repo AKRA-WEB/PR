@@ -2,6 +2,8 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
+    <script src="js/akra-shell-bridge.js?v=20260918.02"></script>
+    <script src="js/pr-api-client.js?v=20260918.02"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="preconnect" href="https://script.google.com">
@@ -179,7 +181,7 @@
           <i data-lucide="shield-alert" class="w-16 h-16 text-red-500 mx-auto mb-4"></i>
           <h2 class="text-xl font-bold text-gray-800 mb-2">ปฏิเสธการเข้าถึง</h2>
           <p id="error-message" class="text-gray-600 mb-6">คุณไม่มีสิทธิ์เข้าใช้งานแอปพลิเคชันนี้</p>
-          <button onclick="window.location.href=APP_CONFIG.PORTAL_URL" class="px-6 py-2.5 bg-[#171C8F] text-white rounded-lg font-medium hover:bg-[#11146B] transition shadow-md">กลับไปหน้าหลัก (Portal)</button>
+          <button onclick="window.AkraModule.home(APP_CONFIG.PORTAL_URL)" class="px-6 py-2.5 bg-[#171C8F] text-white rounded-lg font-medium hover:bg-[#11146B] transition shadow-md">กลับไปหน้าหลัก (Portal)</button>
       </div>
   </div>
 
@@ -244,6 +246,7 @@
 
             <div class="mt-8 pt-5 border-t border-gray-100 pr-submit">
               <button type="submit" id="btn-submit-pr" class="btn btn-primary text-lg font-medium shadow-lg shadow-brand-blue/20 py-4">ส่งคำขอสั่งซื้อ (Submit PR)</button>
+              <button type="button" id="pr-restore-pending" class="btn btn-secondary" onclick="restorePendingPR(true)" hidden>กู้คืนคำขอค้าง</button>
             </div>
           </form>
         </div>
@@ -272,7 +275,7 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    const CURRENT_VERSION = "20260914.03";
+    const CURRENT_VERSION = "20260918.02";
     async function checkAppVersion() {
         try {
             const res = await fetch('version.json?t=' + Date.now());
@@ -401,13 +404,10 @@
     })();
 
     var APP_CONFIG = {
-        API_URL: "https://script.google.com/macros/s/AKfycbyQJLwb5HTexG6gxqTehGWlAxfSXVT--CpWnnp2JTcP4xCcMA1vUjSY_eWqPjUKwzq7/exec",
         PORTAL_URL: "https://akra-web.github.io/Main/", 
-        REQUIRED_ROLES: ["ADMIN", "AKRA", "WAREHOUSE", "PURCHASING", "USER"],
         APP_NAME: "แบบฟอร์มขอซื้อสินค้า (PR)",
         STORAGE_KEY: "akra_pr_session"
     };
-    var DATA_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx9AFlNt3s-RVMlgVpC3qqp9kR9aKJbX2XKC_xnLs2ZO666dedQM7pMbs6vtSaOPiw/exec";
     
     var appData = { products: [] };
     var UI = {
@@ -416,72 +416,66 @@
         showApp: (username) => { document.body.classList.remove('loading-active'); document.getElementById('auth-loading').classList.add('hidden'); document.getElementById('app-content').classList.remove('hidden'); document.getElementById('display-username').innerText = username; document.getElementById('pr-requester').value = username; }
     };
 
+    var prSessionToken = '';
+    var prApiClient = null;
+    function prClient() {
+        if (!prApiClient) prApiClient = window.AkraPR.create({
+            storage: localStorage,
+            getUserId: () => window.appSession?.id || '',
+            getIdentityId: () => window.appSession?.identityId || '',
+            getToken: () => window.AkraModule?.embedded ? window.AkraModule.getToken() : prSessionToken
+        });
+        return prApiClient;
+    }
+    function prStorageKey(key) { return prClient().storageKey(key); }
+
     var AuthGuard = {
         init: async () => {
-            const isVersionOk = await checkAppVersion();
-            if (!isVersionOk) return;
+            if (!await checkAppVersion()) return;
             AppVersionGuard.start({ current: CURRENT_VERSION, readActions: ['getInitialData', 'getProducts', 'getPRHistory'] });
-
             lucide.createIcons();
             UI.showLoading();
             try {
-                const isPreviewEnv = window.self !== window.top || window.location.hostname === "" || window.location.hostname === "localhost" || window.location.hostname.includes("googleusercontent");
-                if (isPreviewEnv) {
-                    window.currentUser = "พนักงานขอซื้อ (Preview)";
-                    UI.showApp(window.currentUser);
-                    AuthGuard.bindEvents();
-                    await loadInitialData();
-                    return; 
-                }
-
-                const urlParams = new URLSearchParams(window.location.search);
-                const ssoToken = urlParams.get('sso');
-
-                if (ssoToken) {
-                    const fixedSsoToken = ssoToken.replace(/ /g, '+');
-                    window.history.replaceState({}, document.title, window.location.pathname);
-                    const rolesParam = APP_CONFIG.REQUIRED_ROLES.length ? '&roles=' + APP_CONFIG.REQUIRED_ROLES.join(',') : '';
-                    const verifyURL = `${APP_CONFIG.API_URL}?action=verifyToken&token=${encodeURIComponent(fixedSsoToken)}${rolesParam}`;
-                    
-                    const response = await fetch(verifyURL);
-                    if (!response.ok) throw new Error("API_ERROR");
-                    const result = await response.json();
-
-                    if (!result.valid) {
-                        localStorage.removeItem(APP_CONFIG.STORAGE_KEY);
-                        UI.showError('เกิดข้อผิดพลาดในการยืนยันตัวตน');
-                        return;
-                    }
-                    localStorage.setItem(APP_CONFIG.STORAGE_KEY, JSON.stringify({ name: result.user.name, roles: result.user.roles }));
-                    window.currentUser = result.user.name;
-                    UI.showApp(result.user.name);
-                    AuthGuard.bindEvents();
-                    await loadInitialData();
-
+                let user;
+                if (window.AkraModule?.embedded) {
+                    user = await window.AkraModule.verifySession('app-pr');
+                } else if (window.AkraModule?.isLocalPreview()) {
+                    user = { id: 'local-preview', name: 'พนักงานขอซื้อ (Preview)', roles: [] };
                 } else {
-                    const cached = localStorage.getItem(APP_CONFIG.STORAGE_KEY);
-                    if (!cached) { window.location.href = APP_CONFIG.PORTAL_URL; return; }
-                    let session;
-                    try { session = JSON.parse(cached); } catch(e) { localStorage.removeItem(APP_CONFIG.STORAGE_KEY); UI.showError("Session ไม่ถูกต้อง"); return; }
-                    
-                    const hasPermission = APP_CONFIG.REQUIRED_ROLES.length === 0 || session.roles.some(r => APP_CONFIG.REQUIRED_ROLES.includes(r));
-                    if (!hasPermission) { localStorage.removeItem(APP_CONFIG.STORAGE_KEY); UI.showError("คุณไม่มีสิทธิ์เข้าถึง"); return; }
-
-                    window.currentUser = session.name;
-                    UI.showApp(session.name);
-                    AuthGuard.bindEvents();
-                    await loadInitialData();
+                    const params = new URLSearchParams(window.location.search);
+                    const incoming = params.get('sso');
+                    prSessionToken = incoming ? incoming.replace(/ /g, '+') : sessionStorage.getItem(APP_CONFIG.STORAGE_KEY) || '';
+                    if (incoming) window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+                    if (!prSessionToken) { window.AkraModule.home(APP_CONFIG.PORTAL_URL); return; }
+                    user = await window.AkraModule.verifySession('app-pr', prSessionToken);
+                    try { sessionStorage.setItem(APP_CONFIG.STORAGE_KEY, prSessionToken); } catch (_) { /* Current tab can still use its verified in-memory session. */ }
                 }
+                window.appSession = { ...user, tokenVersion: 2 };
+                window.currentUser = user.name;
+                UI.showApp(user.name);
+                if (!window.AkraPR.can(user, 'createPR')) document.querySelectorAll('#form-pr input, #form-pr select, #form-pr button').forEach(control => { control.disabled = true; });
+                AuthGuard.bindEvents();
+                await loadInitialData();
+                restorePendingPR(false);
             } catch (error) {
-                console.error("Auth Error:", error);
-                const isPreviewEnv = window.self !== window.top || window.location.hostname === "";
-                if (isPreviewEnv) { window.currentUser = "พนักงานขอซื้อ (API Error)"; UI.showApp(window.currentUser); AuthGuard.bindEvents(); await loadInitialData(); } 
-                else { UI.showError("ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบสิทธิ์ได้"); }
+                UI.showError(error.message === 'permission_denied' ? 'ไม่มีสิทธิ์เข้าแอป กรุณาตรวจสิทธิ์ใน Main' : 'ไม่สามารถยืนยันเซสชันได้ กรุณาเปิดจาก Main ใหม่');
             }
         },
         bindEvents: () => {
+            window.AkraModule?.watchSession?.({appId:'app-pr', user:window.appSession, token:prSessionToken,
+                invalidated:() => {
+                    window.appSession = null; window.currentUser = null; prSessionToken = '';
+                    document.getElementById('app-content').classList.add('hidden');
+                    hideDataLoading();
+                    UI.showError('เซสชัน Main เปลี่ยนแล้ว กรุณาเปิดแอปจาก Main ใหม่ และตรวจผลรายการก่อนส่งซ้ำ');
+                },
+                refreshed:token => { prSessionToken = token; }
+            });
             const logoutBtn = document.getElementById('logout-btn');
-            if(logoutBtn) { logoutBtn.addEventListener('click', () => { localStorage.removeItem(APP_CONFIG.STORAGE_KEY); window.location.href = APP_CONFIG.PORTAL_URL; }); }
+            if (logoutBtn) logoutBtn.addEventListener('click', () => {
+                if (!window.AkraModule?.embedded) sessionStorage.removeItem(APP_CONFIG.STORAGE_KEY);
+                window.AkraModule.home(APP_CONFIG.PORTAL_URL);
+            });
         }
     };
     document.addEventListener('DOMContentLoaded', AuthGuard.init);
@@ -489,10 +483,10 @@
     function showDataLoading(text = 'กำลังโหลด...') { document.getElementById('data-loader-text').innerText = text; document.getElementById('data-loader').classList.remove('hidden'); document.getElementById('data-loader').classList.add('flex'); }
     function hideDataLoading() { document.getElementById('data-loader').classList.add('hidden'); document.getElementById('data-loader').classList.remove('flex'); }
     const PR_CACHE_TTL = 10 * 60 * 1000;
-    function getCache(key, ttlMs) { try { const raw = localStorage.getItem(key); if (!raw) return null; const w = JSON.parse(raw); if (Date.now() - (w._ts||0) > ttlMs) { localStorage.removeItem(key); return null; } return w._d; } catch(e) { localStorage.removeItem(key); return null; } }
+    function getCache(key, ttlMs) { try { key = prStorageKey(key); const raw = localStorage.getItem(key); if (!raw) return null; const w = JSON.parse(raw); if (Date.now() - (w._ts||0) > ttlMs) { localStorage.removeItem(key); return null; } return w._d; } catch(e) { return null; } }
     function setCache(key, data) {
         try {
-            localStorage.setItem(key, JSON.stringify({ _ts: Date.now(), _d: data }));
+            localStorage.setItem(prStorageKey(key), JSON.stringify({ _ts: Date.now(), _d: data }));
             return true;
         } catch (error) {
             // Cached data is optional; a full origin must not block a successful read.
@@ -516,16 +510,29 @@
     }
 
     async function apiCall(action, payload = null) {
+      const operation = () => transportApiCall(action, payload);
+      return window.AkraModule?.embedded && !['getInitialData','getProducts','getPRHistory'].includes(action)
+        ? window.AkraModule.runMutation(operation) : operation();
+    }
+
+    async function transportApiCall(action, payload = null) {
       if (await AppVersionGuard.blockIfStale(action)) return { success: false, message: 'พบเวอร์ชันใหม่ กรุณารีโหลดก่อนทำรายการ' };
       if (!navigator.onLine) return { success: false, message: 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต' };
       try {
-        const res = await fetch(DATA_SCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action, data: payload }) });
-        return await res.json();
+        if (window.AkraModule?.isLocalPreview()) return ['getProducts','getPRHistory'].includes(action) ? { success: true, products: [], history: [] } : { success: false, message: 'โหมดตัวอย่างไม่บันทึกข้อมูลจริง' };
+        return await prClient().call(action, payload);
       } catch (error) { return { success: false, message: 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้' }; }
     }
 
     async function loadInitialData(isManualRefresh = false) {
       try {
+        if (!window.AkraPR.can(window.appSession, 'viewPR')) {
+            appData.products = [];
+            renderHistoryFromServer([]);
+            hideDataLoading();
+            showNotification('ไม่มีสิทธิ์ดูสินค้าและประวัติ PR กรุณาตรวจสิทธิ์ใน Main', 'warning');
+            return;
+        }
         // [CACHE FIRST METHOD] โหลดข้อมูลเดิมมาแสดงก่อนทันที
         const cachedInit = getCache('CACHE_PR_INIT_DATA', PR_CACHE_TTL);
         const cachedHist = getCache('CACHE_PR_HIST_DATA', PR_CACHE_TTL);
@@ -533,7 +540,7 @@
         if (cachedInit && cachedHist && !isManualRefresh) {
             try {
                 appData.products = cachedInit.products || [];
-                const savedWarehouse = localStorage.getItem('pr_warehouse_pref');
+                const savedWarehouse = getCache('pr_warehouse_pref', 365 * 24 * 60 * 60 * 1000);
                 if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
 
                 // ถ้ารายการขอยังว่างอยู่ ให้โหลดแถวเปล่า 1 แถวขึ้นมา
@@ -556,8 +563,8 @@
             appData.products = initRes.products || [];
             
             // วาดแถวเปล่าเฉพาะตอนที่เข้าแอปครั้งแรกและไม่ได้ดึง Cache (กันไม่ให้ไปล้างข้อมูลที่ User กำลังพิมพ์)
-            if (!cachedInit || isManualRefresh) {
-                const savedWarehouse = localStorage.getItem('pr_warehouse_pref');
+            if (document.getElementById('pr-items-container').children.length === 0) {
+                const savedWarehouse = getCache('pr_warehouse_pref', 365 * 24 * 60 * 60 * 1000);
                 if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
                 document.getElementById('pr-items-container').innerHTML = '';
                 addEmptyItemRow();
@@ -792,6 +799,7 @@
 
     async function submitPR(e) {
         e.preventDefault();
+        if (!window.AkraPR.can(window.appSession, 'createPR')) return showNotification('ไม่มีสิทธิ์สร้าง PR กรุณาตรวจสิทธิ์ใน Main', 'warning');
         
         const requesterInput = document.getElementById('pr-requester');
         const warehouseInput = document.getElementById('pr-warehouse');
@@ -804,7 +812,7 @@
         if(!requester) { requesterInput.classList.add('input-error'); return showNotification("กรุณาระบุชื่อผู้ขอซื้อ", "warning"); }
         if(!warehouse) { warehouseInput.classList.add('input-error'); return showNotification("กรุณาเลือกสาขา/คลังสินค้า", "warning"); }
 
-        localStorage.setItem('pr_warehouse_pref', warehouse);
+        setCache('pr_warehouse_pref', warehouse);
 
         const rows = document.querySelectorAll('#pr-items-container .item-row');
         const itemsToSubmit = [];
@@ -836,17 +844,24 @@
         if(itemsToSubmit.length === 0) return showNotification("กรุณาระบุสินค้าที่ต้องการอย่างน้อย 1 รายการ", "warning");
 
         const btn = document.getElementById('btn-submit-pr');
+        const formControls = Array.from(document.querySelectorAll('#form-pr input, #form-pr select, #form-pr button')).map(control => [control, control.disabled]);
+        formControls.forEach(([control]) => { control.disabled = true; });
         btn.disabled = true;
         showDataLoading('กำลังส่งคำขอสั่งซื้อ...');
 
         const payload = { requester, warehouse, items: itemsToSubmit };
-        const res = await apiCall('createPR', payload);
-
-        // ปิดหน้าโหลดทันทีที่ API คืนค่าเสร็จ
-        btn.disabled = false;
-        hideDataLoading(); 
+        let res;
+        try { res = await apiCall('createPR', payload); }
+        catch (_) { res = {success: false, pending: true, message: 'ยังยืนยันผลบันทึกไม่ได้ กรุณาส่งซ้ำด้วยข้อมูลเดิม'}; }
+        finally {
+            formControls.forEach(([control, disabled]) => { control.disabled = disabled; });
+            btn.disabled = false;
+            hideDataLoading();
+        }
 
         if(res.success) {
+            window.AkraModule?.markSaved();
+            document.getElementById('pr-restore-pending').hidden = true;
             showNotification('ส่งคำขอสั่งซื้อเรียบร้อยแล้ว!', 'success');
             
             // ล้างหน้าจอให้พร้อมกรอกใหม่ทันที ไม่ต้องรอให้ประวัติด้านล่างโหลดเสร็จ
@@ -863,8 +878,26 @@
             });
             
         } else {
+            document.getElementById('pr-restore-pending').hidden = !res.pending;
             showNotification('เกิดข้อผิดพลาด: ' + (res.message || res.error), 'error');
         }
+    }
+
+    function restorePendingPR(ask) {
+        try {
+            const pending = prClient().pending();
+            document.getElementById('pr-restore-pending').hidden = !pending;
+            if (!pending || (ask && !confirm('แทนข้อมูลในแบบฟอร์มด้วยคำขอที่ยังไม่ทราบผลบันทึกหรือไม่?'))) return;
+            document.getElementById('pr-warehouse').value = pending.data.warehouse;
+            document.getElementById('pr-items-container').innerHTML = '';
+            pending.data.items.forEach(item => {
+                addEmptyItemRow();
+                const row = document.querySelector('#pr-items-container .item-row:last-child');
+                for (const [field, value] of Object.entries({sku:item.sku,product:item.product,qty:item.quantity,unit:item.unit,remark:item.remark})) row.querySelector('.p-' + field + '-input').value = value || '';
+            });
+            window.AkraModule?.markDirty();
+            showNotification('กู้คืนคำขอค้างแล้ว ส่งซ้ำด้วยข้อมูลเดิมเพื่อยืนยันผลโดยไม่สร้างรายการซ้ำ', 'warning');
+        } catch (_) { showNotification('อ่านคำขอค้างไม่ได้ กรุณาตรวจพื้นที่จัดเก็บก่อนส่งใหม่', 'error'); }
     }
   </script>
 </body>

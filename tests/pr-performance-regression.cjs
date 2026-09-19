@@ -14,6 +14,8 @@ async function run(source = fs.readFileSync(path.join(__dirname, '../index.html'
     const elements = new Map();
     const ctx = {
       console: { error() {} }, PR_CACHE_TTL: 1000, appData: {},
+      prStorageKey: key => key + '::fixture',
+      window: { appSession: {id:'fixture'}, AkraPR: require('../js/pr-api-client.js') },
       localStorage: { getItem: () => null, removeItem() {}, setItem(key, value) {
         if (quota) throw Object.assign(new Error('fixture quota'), { name: 'QuotaExceededError' });
         saved.set(key, JSON.parse(value));
@@ -33,7 +35,7 @@ async function run(source = fs.readFileSync(path.join(__dirname, '../index.html'
     assert.ok(hides > 0);
     assert.equal(notices.length, 0);
     assert.deepEqual(requests, ['getProducts', 'getPRHistory']);
-    if (!quota) assert.deepEqual(Object.keys(saved.get('CACHE_PR_INIT_DATA')._d), ['products']);
+    if (!quota) assert.deepEqual(Object.keys(saved.get('CACHE_PR_INIT_DATA::fixture')._d), ['products']);
     ctx.renderHistoryFromServer = () => { throw new Error('fixture render failure'); };
     await ctx.loadInitialData();
     assert.equal(notices.length, 1, 'data errors are contained in the loader, not propagated as auth failures');
