@@ -2,7 +2,7 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <script src="js/akra-shell-bridge.js?v=20260921.02"></script>
+    <script src="js/akra-shell-bridge.js?v=20260921.03"></script>
     <script src="js/pr-api-client.js?v=20260918.02"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -275,7 +275,7 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    const CURRENT_VERSION = "20260921.02";
+    const CURRENT_VERSION = "20260921.03";
     async function checkAppVersion() {
         try {
             const res = await fetch('version.json?t=' + Date.now());
