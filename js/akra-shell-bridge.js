@@ -413,7 +413,7 @@
         const style = doc.createElement('style');
         style.id = 'akra-shell-embedded-navigation-style';
         style.textContent = `
-            @media (min-width: 1024px) {
+            @media (min-width: 768px) {
                 .gr-sidebar, #main-sidebar, #trd-module-nav, #desktop-primary-nav, .sidebar, .po-workflow-nav { display: none !important; }
                 #app-content { margin-left: 0 !important; padding-left: 0 !important; width: 100% !important; }
                 .gr-topbar, .gr-main, .trd-topbar, .app-header { margin-left: 0 !important; width: 100% !important; }
