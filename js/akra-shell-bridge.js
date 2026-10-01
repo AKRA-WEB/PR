@@ -8,14 +8,14 @@
     let dirty = false, busy = 0, leaving = false;
     const APP_SWITCHER_CATALOG = Object.freeze([
         {id:'app-w5', label:'เบิกย้ายสินค้า (AKRA)', path:'/AKRA/', icon:'package'},
-        {id:'app-trd', label:'เบิกย้ายสินค้าสต๊อก (AKRA>TRD)', path:'/TRDAKRA/', icon:'arrow-right-left'},
-        {id:'app-gr', label:'ตรวจรับเข้าสินค้า (GR)', path:'/GR/', icon:'clipboard-check'},
-        {id:'app-pr', label:'ขอสั่งชื้อสินค้า (PR)', path:'/PR/', icon:'file-plus-2'},
-        {id:'app-pick', label:'บิลเบิกสินค้า (Picking)', path:'/Picking/', icon:'package-check'},
-        {id:'app-tracking', label:'จัดการคำสั่งชื้อ (PO)', path:'/TrackingPO/', icon:'truck'},
+        {id:'app-trd', label:'เบิกย้ายสินค้าสต๊อก (AKRA → TRD)', path:'/TRDAKRA/', icon:'arrow-right-left'},
+        {id:'app-gr', label:'รับสินค้า', path:'/GR/', icon:'clipboard-check'},
+        {id:'app-pr', label:'ขอซื้อสินค้า', path:'/PR/', icon:'file-plus-2'},
+        {id:'app-pick', label:'เบิกสินค้า', path:'/Picking/', icon:'package-check'},
+        {id:'app-tracking', label:'จัดซื้อสินค้า', path:'/TrackingPO/', icon:'truck'},
         {id:'app-damage', label:'รับคืนสินค้าและเคลม', path:'/Returnitem/', icon:'package-x'},
-        {id:'app-kpi', label:'KPI Tracker', path:'/KPITRACKER/', icon:'chart-no-axes-combined'},
-        {id:'app-manual', label:'คู่มือ', path:'/SOP/', icon:'book-open'},
+        {id:'app-kpi', label:'งานและทีม', path:'/KPITRACKER/', icon:'chart-no-axes-combined'},
+        {id:'app-manual', label:'คู่มือการทำงาน', path:'/SOP/', icon:'book-open'},
         {id:'app-evaluation', label:'แบบประเมินพนักงาน', path:'/Evaluation/', icon:'clipboard-list'}
     ]);
     const WORKFLOW_NAV = Object.freeze({
@@ -164,7 +164,7 @@
                 if (!authorizedApps.has(app.id)) return [];
                 const configured = Array.isArray(cached) ? cached.find(item => item?.id === app.id) : null;
                 if (configured?.isActive === false) return [];
-                return [{...app, label: typeof configured?.name === 'string' && configured.name ? configured.name : app.label}];
+                return [{...app}];
             });
         }
         if (!Array.isArray(cached) || !roles.length) {
@@ -176,7 +176,7 @@
             const configured = cached.find(item => item?.id === app.id);
             if (!configured || configured.isActive === false || !Array.isArray(configured.roles)
                 || !configured.roles.some(role => roleSet.has(role))) return [];
-            return [{...app, label: typeof configured.name === 'string' && configured.name ? configured.name : app.label}];
+            return [{...app}];
         });
     }
     function ensureSwitcherStyles() {
@@ -223,11 +223,11 @@
         brand.className = 'akra-global-switcher__brand';
         const mark = document.createElement('span');
         mark.className = 'akra-global-switcher__mark';
-        mark.textContent = 'AK';
+        mark.textContent = 'BM';
         const brandCopy = document.createElement('span');
         brandCopy.className = 'akra-global-switcher__brand-copy';
         const brandTitle = document.createElement('strong');
-        brandTitle.textContent = 'AKRA WEB';
+        brandTitle.textContent = 'BUYMORETH';
         const brandSubtitle = document.createElement('small');
         brandSubtitle.textContent = 'สลับแอปพลิเคชัน';
         brandCopy.appendChild(brandTitle); brandCopy.appendChild(brandSubtitle);
@@ -236,7 +236,7 @@
         home.type = 'button'; home.className = 'akra-global-switcher__home';
         home.title = 'กลับหน้าหลัก'; home.setAttribute('aria-label','กลับหน้าหลัก');
         home.appendChild(switcherIcon('home'));
-        const homeLabel = document.createElement('span'); homeLabel.className = 'akra-global-switcher__app-label'; homeLabel.textContent = 'Main'; home.appendChild(homeLabel);
+        const homeLabel = document.createElement('span'); homeLabel.className = 'akra-global-switcher__app-label'; homeLabel.textContent = 'หน้าหลัก'; home.appendChild(homeLabel);
         home.addEventListener('click', () => {
             if (!confirmStandaloneLeave()) return;
             window.AkraModule?.home?.(new URL('/Main/', window.location.origin).href);
@@ -304,7 +304,7 @@
         host.appendChild(nav);
         const footer = document.createElement('div');
         footer.className = 'akra-global-switcher__footer';
-        footer.textContent = 'สิทธิ์การเข้าใช้งานควบคุมโดย Main';
+        footer.textContent = 'สิทธิ์การเข้าใช้งานควบคุมโดย BUYMORETH';
         host.appendChild(footer);
     }
     function localSidebarHost() {

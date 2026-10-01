@@ -2,12 +2,12 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <script src="js/akra-shell-bridge.js?v=20260921.04"></script>
-    <script src="js/pr-api-client.js?v=20260918.02"></script>
+    <script src="js/akra-shell-bridge.js?v=20261001.01"></script>
+    <script src="js/pr-api-client.js?v=20261001.01"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="preconnect" href="https://hgxrrskztbpejirrdpbq.supabase.co">
-  <title>แบบฟอร์มขอซื้อสินค้า (PR)</title>
+  <title>BUYMORETH | ขอซื้อสินค้า</title>
   
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Lucide Icons -->
@@ -193,8 +193,8 @@
             <div class="flex-shrink-0 flex items-center pr-brand">
               <span class="pr-brand__mark"><i data-lucide="file-text" class="w-6 h-6 mr-2"></i></span>
               <div class="pr-brand__copy">
-                <small>AKRA REQUEST WORKSPACE</small>
-                <h1 class="text-lg font-semibold tracking-wide pr-brand__title">แบบฟอร์มขอซื้อสินค้า (PR)</h1>
+                <small>BUYMORETH REQUEST WORKSPACE</small>
+                <h1 class="text-lg font-semibold tracking-wide pr-brand__title">ขอซื้อสินค้า</h1>
               </div>
             </div>
             <div class="flex items-center space-x-4 pr-topbar__actions">
@@ -275,7 +275,7 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    const CURRENT_VERSION = "20260921.04";
+    const CURRENT_VERSION = "20261001.01";
     async function checkAppVersion() {
         try {
             const res = await fetch('version.json?t=' + Date.now());
@@ -458,7 +458,7 @@
                 await loadInitialData();
                 restorePendingPR(false);
             } catch (error) {
-                UI.showError(error.message === 'permission_denied' ? 'ไม่มีสิทธิ์เข้าแอป กรุณาตรวจสิทธิ์ใน Main' : 'ไม่สามารถยืนยันเซสชันได้ กรุณาเปิดจาก Main ใหม่');
+                UI.showError(error.message === 'permission_denied' ? 'ไม่มีสิทธิ์เข้าแอป กรุณาตรวจสิทธิ์ใน BUYMORETH' : 'ไม่สามารถยืนยันเซสชันได้ กรุณาเปิดจาก BUYMORETH ใหม่');
             }
         },
         bindEvents: () => {
@@ -467,7 +467,7 @@
                     window.appSession = null; window.currentUser = null; prSessionToken = '';
                     document.getElementById('app-content').classList.add('hidden');
                     hideDataLoading();
-                    UI.showError('เซสชัน Main เปลี่ยนแล้ว กรุณาเปิดแอปจาก Main ใหม่ และตรวจผลรายการก่อนส่งซ้ำ');
+                    UI.showError('เซสชัน BUYMORETH เปลี่ยนแล้ว กรุณาเปิดแอปจาก BUYMORETH ใหม่ และตรวจผลรายการก่อนส่งซ้ำ');
                 },
                 refreshed:token => { prSessionToken = token; }
             });
@@ -530,7 +530,7 @@
             appData.products = [];
             renderHistoryFromServer([]);
             hideDataLoading();
-            showNotification('ไม่มีสิทธิ์ดูสินค้าและประวัติ PR กรุณาตรวจสิทธิ์ใน Main', 'warning');
+            showNotification('ไม่มีสิทธิ์ดูสินค้าและประวัติ PR กรุณาตรวจสิทธิ์ใน BUYMORETH', 'warning');
             return;
         }
         // [CACHE FIRST METHOD] โหลดข้อมูลเดิมมาแสดงก่อนทันที
@@ -799,7 +799,7 @@
 
     async function submitPR(e) {
         e.preventDefault();
-        if (!window.AkraPR.can(window.appSession, 'createPR')) return showNotification('ไม่มีสิทธิ์สร้าง PR กรุณาตรวจสิทธิ์ใน Main', 'warning');
+        if (!window.AkraPR.can(window.appSession, 'createPR')) return showNotification('ไม่มีสิทธิ์สร้าง PR กรุณาตรวจสิทธิ์ใน BUYMORETH', 'warning');
         
         const requesterInput = document.getElementById('pr-requester');
         const warehouseInput = document.getElementById('pr-warehouse');

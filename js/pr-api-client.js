@@ -17,8 +17,8 @@
         return !defined.includes(key) || (Array.isArray(user.perms?.['app-pr']) && user.perms['app-pr'].includes(key));
     }
     function message(reason){
-        if(reason==='permission_denied') return 'ไม่มีสิทธิ์ดำเนินการนี้ กรุณาตรวจสิทธิ์ใน Main';
-        if(['invalid_or_expired_token','shell_session_unavailable','no_token','identity_required','session_changed'].includes(reason)) return 'กรุณากลับเข้าใช้งานจาก Main เพื่อยืนยันเซสชันใหม่';
+        if(reason==='permission_denied') return 'ไม่มีสิทธิ์ดำเนินการนี้ กรุณาตรวจสิทธิ์ใน BUYMORETH';
+        if(['invalid_or_expired_token','shell_session_unavailable','no_token','identity_required','session_changed'].includes(reason)) return 'กรุณากลับเข้าใช้งานจาก BUYMORETH เพื่อยืนยันเซสชันใหม่';
         if(reason==='legacy_pending_reconciliation_required') return 'มีคำขอค้างที่ยังระบุเจ้าของบัญชีถาวรไม่ได้ กรุณาให้ผู้ดูแลตรวจผลรายการเดิมก่อนส่งใหม่';
         if(reason==='pending_submission_mismatch') return 'มีคำขอที่ยังไม่ทราบผล ห้ามส่งเป็นรายการใหม่ กรุณาใช้ปุ่มกู้คืนคำขอค้างและส่งซ้ำด้วยข้อมูลเดิม';
         if(reason==='pending_storage_unavailable' || reason==='pending_storage_corrupt') return 'เก็บข้อมูลป้องกันการส่งซ้ำไม่ได้ จึงยังไม่ได้ส่งคำขอ กรุณาตรวจพื้นที่จัดเก็บของเบราว์เซอร์';
