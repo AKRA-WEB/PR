@@ -7,16 +7,16 @@
     } catch (_) { /* Standalone/cross-origin pages keep their normal entrypoint. */ }
     let dirty = false, busy = 0, leaving = false;
     const APP_SWITCHER_CATALOG = Object.freeze([
-        {id:'app-w5', label:'เบิกย้ายสินค้า (AKRA)', path:'/AKRA/', icon:'package'},
-        {id:'app-trd', label:'เบิกย้ายสินค้าสต๊อก (AKRA → TRD)', path:'/TRDAKRA/', icon:'arrow-right-left'},
-        {id:'app-gr', label:'รับสินค้า', path:'/GR/', icon:'clipboard-check'},
-        {id:'app-pr', label:'ขอซื้อสินค้า', path:'/PR/', icon:'file-plus-2'},
-        {id:'app-pick', label:'เบิกสินค้า', path:'/Picking/', icon:'package-check'},
-        {id:'app-tracking', label:'จัดซื้อสินค้า', path:'/TrackingPO/', icon:'truck'},
-        {id:'app-damage', label:'รับคืนสินค้าและเคลม', path:'/Returnitem/', icon:'package-x'},
-        {id:'app-kpi', label:'งานและทีม', path:'/KPITRACKER/', icon:'chart-no-axes-combined'},
-        {id:'app-manual', label:'คู่มือการทำงาน', path:'/SOP/', icon:'book-open'},
-        {id:'app-evaluation', label:'แบบประเมินพนักงาน', path:'/Evaluation/', icon:'clipboard-list'}
+        {id:'app-w5', label:'W5 • เบิกย้ายสินค้า AKRA', path:'/AKRA/', icon:'package'},
+        {id:'app-trd', label:'TRD • เบิกย้ายสต๊อก AKRA → TRD', path:'/TRDAKRA/', icon:'arrow-right-left'},
+        {id:'app-gr', label:'GR • รับเข้าสินค้า', path:'/GR/', icon:'clipboard-check'},
+        {id:'app-pr', label:'PR • ขอซื้อสินค้า', path:'/PR/', icon:'file-plus-2'},
+        {id:'app-pick', label:'PICK • เบิกสินค้า', path:'/Picking/', icon:'package-check'},
+        {id:'app-tracking', label:'PO • จัดซื้อสินค้า', path:'/TrackingPO/', icon:'truck'},
+        {id:'app-damage', label:'RETURN • รับคืนสินค้าและเคลม', path:'/Returnitem/', icon:'package-x'},
+        {id:'app-kpi', label:'BM Work • งานและทีม', path:'/KPITRACKER/', icon:'chart-no-axes-combined'},
+        {id:'app-manual', label:'SOP • คู่มือการทำงาน', path:'/SOP/', icon:'book-open'},
+        {id:'app-evaluation', label:'EVAL • แบบประเมินพนักงาน', path:'/Evaluation/', icon:'clipboard-list'}
     ]);
     const WORKFLOW_NAV = Object.freeze({
         'app-w5': [
