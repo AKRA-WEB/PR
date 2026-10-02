@@ -13,7 +13,7 @@ async function run(source = fs.readFileSync(path.join(__dirname, '../index.html'
     let hides = 0;
     const elements = new Map();
     const ctx = {
-      console: { error() {} }, PR_CACHE_TTL: 1000, appData: {},
+      console: { error() {} }, PR_CACHE_TTL: 1000, appData: {}, PrPerf: null,
       prStorageKey: key => key + '::fixture',
       window: { appSession: {id:'fixture'}, AkraPR: require('../js/pr-api-client.js') },
       localStorage: { getItem: () => null, removeItem() {}, setItem(key, value) {
@@ -42,7 +42,7 @@ async function run(source = fs.readFileSync(path.join(__dirname, '../index.html'
   }
   // Actual AuthGuard must still deny an invalid SSO response before any data reads.
   let dataReads = 0, errors = 0, shown = 0;
-  const auth = { checkAppVersion: async () => true, AppVersionGuard: { start() {} }, CURRENT_VERSION: 'fixture', lucide: { createIcons() {} },
+  const auth = { PrPerf: null, checkAppVersion: async () => true, AppVersionGuard: { start() {} }, CURRENT_VERSION: 'fixture', lucide: { createIcons() {} },
     UI: { showLoading() {}, showError() { errors++; }, showApp() { shown++; } },
     window: { self: {}, top: {}, location: { hostname: 'example.test', search: '?sso=fixture', pathname: '/' }, history: { replaceState() {} } },
     document: { title: 'fixture' }, URLSearchParams,

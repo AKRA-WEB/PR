@@ -34,5 +34,5 @@ test('PR pending write cannot silently become a new request after editing or swi
 test('PR storage failure blocks submission, server validation permits correction, and denial never becomes success',async()=>{
  const r=fixture();r.storage.setItem=()=>{throw new Error('quota');};const full=await r.client.call('createPR',data);assert.equal(full.reason,'pending_storage_unavailable');assert.equal(r.requests.length,0);
  const q=fixture();q.setMode('invalid');const invalid=await q.client.call('createPR',data);assert.equal(invalid.success,false);assert.equal(q.client.pending(),null);
- q.setMode('denied');const denied=await q.client.call('createPR',data);assert.equal(denied.success,false);assert.equal(denied.reason,'permission_denied');assert.match(denied.message,/Main/);
+ q.setMode('denied');const denied=await q.client.call('createPR',data);assert.equal(denied.success,false);assert.equal(denied.reason,'permission_denied');assert.match(denied.message,/BUYMORETH/);
 });

@@ -275,7 +275,78 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    const CURRENT_VERSION = "20261002.01";
+    const CURRENT_VERSION = "20261002.02";
+    // Opt-in, in-memory startup timings. No identity, response values or URLs leave this helper.
+    var PrPerf = (function () {
+        if (new URLSearchParams(window.location.search).get('akra_perf') !== '1') return null;
+        const clock = () => window.performance.now();
+        const rounded = value => Math.round(value * 100) / 100;
+        const stageNames = ['version-check', 'auth', 'cache-read', 'cache-render', 'api-products', 'api-history', 'products-render', 'history-render', 'draft-restore'];
+        const errorNames = stageNames.concat(['permission', 'data-load', 'session-invalidated', 'form-unavailable']);
+        const readyNames = ['cachedFormProductUsableMs', 'cachedHistoryPaintMs', 'freshFormProductUsableMs', 'freshHistorySettledMs'];
+        const data = {
+            schema: 1, app: 'PR', version: CURRENT_VERSION, status: 'starting', mode: window.AkraModule?.isLocalPreview() ? 'preview' : 'signed', scriptStartMs: rounded(clock()),
+            cache: { products: 'unobserved', history: 'unobserved' }, requestCount: 0,
+            stages: {}, ready: Object.fromEntries(readyNames.map(name => [name, null])),
+            aggregates: {}, errors: []
+        };
+        const node = document.createElement('pre');
+        node.id = 'akra-perf-diagnostics'; node.hidden = true; node.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(node);
+        let claimed = false, productsApplied = false;
+        function publish() { node.textContent = JSON.stringify(data); }
+        function start(stage) { return stageNames.includes(stage) ? clock() : null; }
+        function end(stage, began, status = 'ok') {
+            if (began === null || !stageNames.includes(stage)) return;
+            data.stages[stage] = { durationMs: rounded(Math.max(0, clock() - began)), status: status === 'ok' ? 'ok' : 'error' };
+            publish();
+        }
+        function fail(stage) {
+            if (!errorNames.includes(stage)) return;
+            if (data.status === 'session-invalidated' && stage !== 'session-invalidated') return;
+            if (!data.errors.includes(stage)) data.errors.push(stage);
+            if (stage === 'session-invalidated') { readyNames.forEach(name => { data.ready[name] = null; }); data.aggregates = {}; }
+            data.status = stage === 'session-invalidated' ? 'session-invalidated' : 'error'; publish();
+        }
+        function visible() {
+            return !document.getElementById('app-content').classList.contains('hidden') && document.getElementById('data-loader').classList.contains('hidden');
+        }
+        function formUsable() { return visible() && !!document.querySelector('#pr-items-container .p-product-input:not(:disabled)'); }
+        function mark(name) {
+            if (data.status === 'session-invalidated' || !readyNames.includes(name) || data.ready[name] !== null || !visible()) return;
+            if (name.includes('FormProduct') && !formUsable()) return;
+            data.ready[name] = rounded(clock()); publish();
+        }
+        async function read(stage, operation, field) {
+            if (!((stage === 'api-products' && field === 'products') || (stage === 'api-history' && field === 'history'))) return operation();
+            const began = start(stage); data.requestCount++; publish();
+            try {
+                const result = await operation();
+                end(stage, began, result?.success ? 'ok' : 'error');
+                if (result?.success && data.status !== 'session-invalidated') {
+                    data.aggregates[field + 'Rows'] = Array.isArray(result[field]) ? result[field].length : 0;
+                    // Reserialized UTF-8 response size, not network transfer bytes; only the count is exposed.
+                    try { data.aggregates[field + 'JsonBytes'] = new TextEncoder().encode(JSON.stringify(result)).length; } catch (_) { data.aggregates[field + 'JsonBytes'] = null; }
+                    publish();
+                } else if (!result?.success) fail(stage);
+                return result;
+            } catch (error) { end(stage, began, 'error'); fail(stage); throw error; }
+        }
+        publish();
+        return {
+            start, end, fail, mark, read,
+            beginLoad: () => { if (claimed) return false; claimed = true; return true; },
+            cache: (products, history) => { data.cache.products = products ? 'hit' : 'miss'; data.cache.history = history ? 'hit' : 'miss'; publish(); },
+            productsApplied: () => { productsApplied = true; },
+            finish: () => {
+                if (productsApplied) mark('freshFormProductUsableMs');
+                const fresh = data.ready.freshFormProductUsableMs !== null && data.ready.freshHistorySettledMs !== null;
+                if (data.status !== 'session-invalidated') data.status = fresh && !data.errors.length ? (data.mode === 'preview' ? 'preview' : 'ready') : 'error';
+                if (productsApplied && data.ready.freshFormProductUsableMs === null) fail('form-unavailable');
+                publish();
+            }
+        };
+    })();
     async function checkAppVersion() {
         try {
             const res = await fetch('version.json?t=' + Date.now());
@@ -431,10 +502,14 @@
 
     var AuthGuard = {
         init: async () => {
-            if (!await checkAppVersion()) return;
+            const versionStarted = PrPerf ? PrPerf.start('version-check') : null;
+            const versionCurrent = await checkAppVersion();
+            if (PrPerf) PrPerf.end('version-check', versionStarted, versionCurrent ? 'ok' : 'error');
+            if (!versionCurrent) return;
             AppVersionGuard.start({ current: CURRENT_VERSION, readActions: ['getInitialData', 'getProducts', 'getPRHistory'] });
             lucide.createIcons();
             UI.showLoading();
+            const authStarted = PrPerf ? PrPerf.start('auth') : null;
             try {
                 let user;
                 if (window.AkraModule?.embedded) {
@@ -446,24 +521,29 @@
                     const incoming = params.get('sso');
                     prSessionToken = incoming ? incoming.replace(/ /g, '+') : sessionStorage.getItem(APP_CONFIG.STORAGE_KEY) || '';
                     if (incoming) window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
-                    if (!prSessionToken) { window.AkraModule.home(APP_CONFIG.PORTAL_URL); return; }
+                    if (!prSessionToken) { if (PrPerf) { PrPerf.end('auth', authStarted, 'error'); PrPerf.fail('auth'); } window.AkraModule.home(APP_CONFIG.PORTAL_URL); return; }
                     user = await window.AkraModule.verifySession('app-pr', prSessionToken);
                     try { sessionStorage.setItem(APP_CONFIG.STORAGE_KEY, prSessionToken); } catch (_) { /* Current tab can still use its verified in-memory session. */ }
                 }
                 window.appSession = { ...user, tokenVersion: 2 };
                 window.currentUser = user.name;
+                if (PrPerf) PrPerf.end('auth', authStarted);
                 UI.showApp(user.name);
                 if (!window.AkraPR.can(user, 'createPR')) document.querySelectorAll('#form-pr input, #form-pr select, #form-pr button').forEach(control => { control.disabled = true; });
                 AuthGuard.bindEvents();
                 await loadInitialData();
+                const restoreStarted = PrPerf ? PrPerf.start('draft-restore') : null;
                 restorePendingPR(false);
+                if (PrPerf) { PrPerf.end('draft-restore', restoreStarted); PrPerf.finish(); }
             } catch (error) {
+                if (PrPerf) { if (!window.appSession) PrPerf.end('auth', authStarted, 'error'); PrPerf.fail('auth'); }
                 UI.showError(error.message === 'permission_denied' ? 'ไม่มีสิทธิ์เข้าแอป กรุณาตรวจสิทธิ์ใน BUYMORETH' : 'ไม่สามารถยืนยันเซสชันได้ กรุณาเปิดจาก BUYMORETH ใหม่');
             }
         },
         bindEvents: () => {
             window.AkraModule?.watchSession?.({appId:'app-pr', user:window.appSession, token:prSessionToken,
                 invalidated:() => {
+                    if (PrPerf) PrPerf.fail('session-invalidated');
                     window.appSession = null; window.currentUser = null; prSessionToken = '';
                     document.getElementById('app-content').classList.add('hidden');
                     hideDataLoading();
@@ -525,8 +605,12 @@
     }
 
     async function loadInitialData(isManualRefresh = false) {
+      const measure = !isManualRefresh && PrPerf && PrPerf.beginLoad();
+      let freshHistoryApplied = false;
+      let renderStage = null, renderStarted = null;
       try {
         if (!window.AkraPR.can(window.appSession, 'viewPR')) {
+            if (measure) PrPerf.fail('permission');
             appData.products = [];
             renderHistoryFromServer([]);
             hideDataLoading();
@@ -534,10 +618,13 @@
             return;
         }
         // [CACHE FIRST METHOD] โหลดข้อมูลเดิมมาแสดงก่อนทันที
+        const cacheStarted = measure ? PrPerf.start('cache-read') : null;
         const cachedInit = getCache('CACHE_PR_INIT_DATA', PR_CACHE_TTL);
         const cachedHist = getCache('CACHE_PR_HIST_DATA', PR_CACHE_TTL);
+        if (measure) { PrPerf.end('cache-read', cacheStarted); PrPerf.cache(!!cachedInit, !!cachedHist); }
 
         if (cachedInit && cachedHist && !isManualRefresh) {
+            const cacheRenderStarted = measure ? PrPerf.start('cache-render') : null;
             try {
                 appData.products = cachedInit.products || [];
                 const savedWarehouse = getCache('pr_warehouse_pref', 365 * 24 * 60 * 60 * 1000);
@@ -547,18 +634,24 @@
                 if (document.getElementById('pr-items-container').children.length === 0) addEmptyItemRow();
 
                 renderHistoryFromServer(cachedHist.history);
+                if (measure) { PrPerf.end('cache-render', cacheRenderStarted); PrPerf.mark('cachedFormProductUsableMs'); PrPerf.mark('cachedHistoryPaintMs'); }
                 showNotification('กำลังอัปเดตข้อมูลล่าสุด...', 'warning');
-            } catch(e) { console.error(e); showDataLoading('เตรียมความพร้อมระบบ...'); }
+            } catch(e) { if (measure) { PrPerf.end('cache-render', cacheRenderStarted, 'error'); PrPerf.fail('cache-render'); } console.error(e); showDataLoading('เตรียมความพร้อมระบบ...'); }
         } else {
             showDataLoading('เตรียมความพร้อมระบบ...');
         }
 
         // ยิงหลังบ้านเบื้องหลังเพื่อดึงข้อมูลใหม่
-        const [initRes, histRes] = await Promise.all([ apiCall('getProducts'), apiCall('getPRHistory') ]);
+        const [initRes, histRes] = await Promise.all([
+            measure ? PrPerf.read('api-products', () => apiCall('getProducts'), 'products') : apiCall('getProducts'),
+            measure ? PrPerf.read('api-history', () => apiCall('getPRHistory'), 'history') : apiCall('getPRHistory')
+        ]);
         
         if (!cachedInit || !cachedHist || isManualRefresh) hideDataLoading();
 
         if (initRes.success) {
+            const productsStarted = measure ? PrPerf.start('products-render') : null;
+            if (measure) { renderStage = 'products-render'; renderStarted = productsStarted; }
             setCache('CACHE_PR_INIT_DATA', { products: initRes.products || [] });
             appData.products = initRes.products || [];
             
@@ -569,18 +662,25 @@
                 document.getElementById('pr-items-container').innerHTML = '';
                 addEmptyItemRow();
             }
+            if (measure) { PrPerf.end('products-render', productsStarted); PrPerf.productsApplied(); renderStage = null; }
         }
         
         if (histRes.success) {
+            const historyStarted = measure ? PrPerf.start('history-render') : null;
+            if (measure) { renderStage = 'history-render'; renderStarted = historyStarted; }
             setCache('CACHE_PR_HIST_DATA', histRes);
             renderHistoryFromServer(histRes.history);
+            freshHistoryApplied = true;
+            if (measure) { PrPerf.end('history-render', historyStarted); renderStage = null; }
         }
         if (!initRes.success || !histRes.success) showNotification('โหลดข้อมูลบางส่วนไม่สำเร็จ กรุณารีเฟรชเพื่อลองอีกครั้ง', 'error');
       } catch (error) {
+        if (measure) { if (renderStage) { PrPerf.end(renderStage, renderStarted, 'error'); PrPerf.fail(renderStage); } PrPerf.fail('data-load'); }
         console.error('PR data load error:', error);
         showNotification('โหลดข้อมูลไม่สำเร็จ กรุณารีเฟรชเพื่อลองอีกครั้ง', 'error');
       } finally {
         hideDataLoading();
+        if (measure && freshHistoryApplied) PrPerf.mark('freshHistorySettledMs');
       }
     }
 
