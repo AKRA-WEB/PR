@@ -7,22 +7,23 @@ async function run(source = fs.readFileSync(path.join(__dirname, '../index.html'
   for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)) if (match[1].trim()) new vm.Script(match[1]);
   const slice = (start, end) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
   const cache = slice('    function getCache(', '    function showNotification(');
-  const loader = slice('    async function loadInitialData(', '    function renderHistoryFromServer(');
+  const loader = slice('    var prReadState = ', '    function renderHistoryFromServer(');
   for (const quota of [true, false]) {
     const saved = new Map(), requests = [], rendered = [], notices = [];
     let hides = 0;
     const elements = new Map();
     const ctx = {
-      console: { error() {} }, PR_CACHE_TTL: 1000, appData: {}, PrPerf: null,
+      console: { error() {} }, navigator: { onLine: true }, PR_CACHE_TTL: 1000, appData: {}, PrPerf: null,
       prStorageKey: key => key + '::fixture',
       window: { appSession: {id:'fixture'}, AkraPR: require('../js/pr-api-client.js') },
       localStorage: { getItem: () => null, removeItem() {}, setItem(key, value) {
         if (quota) throw Object.assign(new Error('fixture quota'), { name: 'QuotaExceededError' });
         saved.set(key, JSON.parse(value));
       } },
-      document: { getElementById(id) { if (!elements.has(id)) elements.set(id, { children: [], value: '', innerHTML: '' }); return elements.get(id); } },
+      document: { getElementById(id) { if (!elements.has(id)) elements.set(id, { children: [], value: '', innerHTML: '', hidden: true, disabled: false }); return elements.get(id); } },
       showDataLoading() {}, hideDataLoading() { hides++; },
       addEmptyItemRow() { rendered.push('row'); },
+      updateTotalItemsCount() {},
       renderHistoryFromServer(history) { rendered.push(history[0].prNumber); },
       showNotification(message) { notices.push(message); },
       apiCall: async action => { requests.push(action); return action === 'getPRHistory' ? { success: true, history: [{ prNumber: 'fixture-pr' }] } : { success: true, products: [{ name: 'fixture-product', unit: 'box' }], pendingPOs: [{ unused: true }] }; }
@@ -38,13 +39,17 @@ async function run(source = fs.readFileSync(path.join(__dirname, '../index.html'
     if (!quota) assert.deepEqual(Object.keys(saved.get('CACHE_PR_INIT_DATA::fixture')._d), ['products']);
     ctx.renderHistoryFromServer = () => { throw new Error('fixture render failure'); };
     await ctx.loadInitialData();
-    assert.equal(notices.length, 1, 'data errors are contained in the loader, not propagated as auth failures');
+    assert.equal(elements.get('pr-history-error').hidden, false, 'data errors are contained in the history region, not propagated as auth failures');
+    assert.equal(elements.get('pr-products-error').hidden, true, 'a history render error must not discard successful products');
+    assert.equal(ctx.appData.products[0].name, 'fixture-product');
+    assert.equal(notices.length, 0, 'recoverable read errors use the inline recovery region');
   }
   // Actual AuthGuard must still deny an invalid SSO response before any data reads.
   let dataReads = 0, errors = 0, shown = 0;
   const auth = { PrPerf: null, checkAppVersion: async () => true, AppVersionGuard: { start() {} }, CURRENT_VERSION: 'fixture', lucide: { createIcons() {} },
     UI: { showLoading() {}, showError() { errors++; }, showApp() { shown++; } },
-    window: { self: {}, top: {}, location: { hostname: 'example.test', search: '?sso=fixture', pathname: '/' }, history: { replaceState() {} } },
+    window: { self: {}, top: {}, location: { hostname: 'example.test', search: '?sso=fixture', pathname: '/' }, history: { replaceState() {} },
+      AkraModule: { isLocalPreview: () => false, verifySession: async () => { throw new Error('invalid_or_expired_token'); } } },
     document: { title: 'fixture' }, URLSearchParams,
     APP_CONFIG: { REQUIRED_ROLES: [], API_URL: 'https://fixture.invalid', STORAGE_KEY: 'fixture' },
     localStorage: { removeItem() {}, setItem() {} },

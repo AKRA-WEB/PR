@@ -2,8 +2,8 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-    <script src="js/akra-shell-bridge.js?v=20261002.01"></script>
-    <script src="js/pr-api-client.js?v=20261002.01"></script>
+    <script src="js/akra-shell-bridge.js?v=20261013.03"></script>
+    <script src="js/pr-api-client.js?v=20261013.03"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="preconnect" href="https://hgxrrskztbpejirrdpbq.supabase.co">
@@ -167,6 +167,7 @@
       body.pr-shell .pr-history-heading { align-items: center; }
       body.pr-shell .pr-history-title { font-size: 14px; }
     }
+    .pr-read-error[hidden], .pr-read-status[hidden] { display: none; }
   </style>
 </head>
 <body class="text-gray-800 antialiased h-screen flex flex-col leading-relaxed loading-active pr-shell">
@@ -238,6 +239,12 @@
               <span class="text-xs font-medium text-brand-blue bg-brand-blueLight px-2.5 py-1 rounded-md border border-brand-blue/20" id="pr-total-items">1 รายการ</span>
             </div>
             
+            <p id="pr-products-status" class="pr-read-status text-sm text-gray-600 mb-3" role="status" hidden>กำลังโหลดรายการสินค้า...</p>
+            <div id="pr-products-error" class="pr-read-error mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900" role="alert" hidden>
+              <p id="pr-products-error-title" class="font-semibold"></p>
+              <p id="pr-products-error-message" class="mt-1"></p>
+              <button type="button" id="pr-products-retry" onclick="retryPRRead('products')" class="btn btn-secondary mt-3" style="width:auto;min-height:44px">โหลดรายการสินค้าอีกครั้ง</button>
+            </div>
             <div id="pr-items-container" class="space-y-4"></div>
             
             <button type="button" onclick="addEmptyItemRow()" class="mt-4 w-full border-2 border-dashed border-gray-300 text-gray-500 hover:text-brand-blue hover:border-brand-blue/50 hover:bg-brand-blueLight/50 py-3 rounded-xl text-sm font-medium transition flex items-center justify-center gap-1.5 active:scale-95 pr-add-row">
@@ -263,6 +270,12 @@
             </button>
         </div>
         
+        <p id="pr-history-status" class="pr-read-status text-sm text-gray-600 mb-3" role="status" hidden>กำลังโหลดประวัติคำขอสั่งซื้อ...</p>
+        <div id="pr-history-error" class="pr-read-error mb-4 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-900" role="alert" hidden>
+          <p id="pr-history-error-title" class="font-semibold"></p>
+          <p id="pr-history-error-message" class="mt-1"></p>
+          <button type="button" id="pr-history-retry" onclick="retryPRRead('history')" class="btn btn-secondary mt-3" style="width:auto;min-height:44px">โหลดประวัติอีกครั้ง</button>
+        </div>
         <div id="pr-history-container" class="space-y-3"></div>
 
       </main>
@@ -275,7 +288,7 @@
   <div id="toast-container" class="toast-container"></div>
 
   <script>
-    const CURRENT_VERSION = "20261002.02";
+    const CURRENT_VERSION = "20261013.03";
     // Opt-in, in-memory startup timings. No identity, response values or URLs leave this helper.
     var PrPerf = (function () {
         if (new URLSearchParams(window.location.search).get('akra_perf') !== '1') return null;
@@ -597,25 +610,116 @@
 
     async function transportApiCall(action, payload = null) {
       if (await AppVersionGuard.blockIfStale(action)) return { success: false, message: 'พบเวอร์ชันใหม่ กรุณารีโหลดก่อนทำรายการ' };
-      if (!navigator.onLine) return { success: false, message: 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต' };
+      if (!navigator.onLine) return { success: false, reason: 'network_error', message: 'กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต' };
       try {
         if (window.AkraModule?.isLocalPreview()) return ['getProducts','getPRHistory'].includes(action) ? { success: true, products: [], history: [] } : { success: false, message: 'โหมดตัวอย่างไม่บันทึกข้อมูลจริง' };
         return await prClient().call(action, payload);
-      } catch (error) { return { success: false, message: 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้' }; }
+      } catch (error) { return { success: false, reason: error.reason || '', errorName: error.name, status: error.status, message: 'ไม่สามารถติดต่อเซิร์ฟเวอร์ได้' }; }
+    }
+
+    var prReadState = { products: { generation: 0, pending: null, recovery: 'retry' }, history: { generation: 0, pending: null, recovery: 'retry' } };
+    var prSubmitPending = false;
+
+    function showPRReadError(kind, result) {
+        const reason = result.reason || '';
+        if (reason === 'session_changed' || (result.errorName === 'AbortError' && reason !== 'request_timeout')) return;
+        let title = 'ระบบขัดข้องชั่วคราว', message = 'ลองอีกครั้งในอีกสักครู่ ถ้ายังไม่ได้ให้แจ้งผู้ดูแล', recovery = 'retry';
+        if (['invalid_or_expired_token', 'shell_session_unavailable', 'no_token', 'identity_required', 'session_expired', 'session_revoked'].includes(reason)) {
+            title = 'เซสชันหมดอายุหรือเปลี่ยนแล้ว'; message = 'เข้าสู่ระบบ BUYMORETH อีกครั้ง'; recovery = 'session';
+        } else if (reason === 'permission_denied') {
+            title = 'ไม่มีสิทธิ์ใช้ส่วนนี้'; message = 'ติดต่อผู้ดูแลใน BUYMORETH เพื่อขอสิทธิ์'; recovery = 'home';
+        } else if (!navigator.onLine || reason === 'network_error' || reason === 'request_timeout' || ['TypeError', 'TimeoutError'].includes(result.errorName)) {
+            title = 'เชื่อมต่อไม่ได้'; message = 'ตรวจสอบอินเทอร์เน็ตแล้วลองอีกครั้ง';
+        } else if (result.status === 401) {
+            title = 'เซสชันหมดอายุหรือเปลี่ยนแล้ว'; message = 'เข้าสู่ระบบ BUYMORETH อีกครั้ง'; recovery = 'session';
+        } else if (result.status === 403) {
+            title = 'ไม่มีสิทธิ์ใช้ส่วนนี้'; message = 'ติดต่อผู้ดูแลใน BUYMORETH เพื่อขอสิทธิ์'; recovery = 'home';
+        }
+        prReadState[kind].recovery = recovery;
+        document.getElementById('pr-' + kind + '-error-title').textContent = title;
+        document.getElementById('pr-' + kind + '-error-message').textContent = message + (kind === 'products' ? ' ข้อมูลที่กรอกไว้ยังอยู่' : '');
+        document.getElementById('pr-' + kind + '-retry').textContent = recovery === 'retry' ? (kind === 'products' ? 'โหลดรายการสินค้าอีกครั้ง' : 'โหลดประวัติอีกครั้ง') : recovery === 'home' ? 'กลับหน้าหลัก' : 'เข้าสู่ระบบอีกครั้ง';
+        document.getElementById('pr-' + kind + '-error').hidden = false;
+    }
+
+    function retryPRRead(kind) {
+        const recovery = prReadState[kind].recovery;
+        if (recovery === 'home') return window.AkraModule.home(APP_CONFIG.PORTAL_URL);
+        if (recovery === 'session') return window.AkraModule.authRequired(APP_CONFIG.PORTAL_URL);
+        return readPRResource(kind);
+    }
+
+    function readPRResource(kind, measure = false, supersede = false) {
+        const state = prReadState[kind];
+        if (state.pending && !supersede) return state.pending;
+        const generation = ++state.generation, session = window.appSession;
+        const action = kind === 'products' ? 'getProducts' : 'getPRHistory';
+        const stage = kind === 'products' ? 'api-products' : 'api-history';
+        document.getElementById('pr-' + kind + '-status').hidden = false;
+        document.getElementById('pr-' + kind + '-retry').disabled = true;
+        const current = () => state.generation === generation && window.appSession === session;
+        const operation = Promise.resolve().then(async () => {
+            try {
+                if (!window.AkraPR.can(session, 'viewPR')) {
+                    if (current()) showPRReadError(kind, { reason: 'permission_denied' });
+                    if (measure) PrPerf.fail('permission');
+                    return;
+                }
+                const result = await (measure ? PrPerf.read(stage, () => apiCall(action), kind) : apiCall(action));
+                if (!current() || result.reason === 'session_changed') return;
+                if (!result.success) { showPRReadError(kind, result); return; }
+                const renderStage = kind === 'products' ? 'products-render' : 'history-render';
+                const started = measure ? PrPerf.start(renderStage) : null;
+                try {
+                    if (kind === 'products') {
+                        setCache('CACHE_PR_INIT_DATA', { products: result.products || [] });
+                        appData.products = result.products || [];
+                        if (measure) PrPerf.productsApplied();
+                    } else {
+                        setCache('CACHE_PR_HIST_DATA', result);
+                        renderHistoryFromServer(result.history);
+                    }
+                    document.getElementById('pr-' + kind + '-error').hidden = true;
+                    state.recovery = 'retry';
+                    if (measure) { PrPerf.end(renderStage, started); if (kind === 'history') PrPerf.mark('freshHistorySettledMs'); }
+                    return true;
+                } catch (error) {
+                    if (measure) { PrPerf.end(renderStage, started, 'error'); PrPerf.fail(renderStage); }
+                    throw error;
+                }
+            } catch (error) {
+                if (current()) showPRReadError(kind, { reason: error.reason || '', errorName: error.name, status: error.status });
+                if (measure) PrPerf.fail('data-load');
+            } finally {
+                if (current()) {
+                    state.pending = null;
+                    document.getElementById('pr-' + kind + '-status').hidden = true;
+                    document.getElementById('pr-' + kind + '-retry').disabled = false;
+                    if (kind === 'products' && !prSubmitPending) hideDataLoading();
+                }
+            }
+        });
+        state.pending = operation;
+        return operation;
     }
 
     async function loadInitialData(isManualRefresh = false) {
       const measure = !isManualRefresh && PrPerf && PrPerf.beginLoad();
       let freshHistoryApplied = false;
-      let renderStage = null, renderStarted = null;
       try {
+        const firstRow = document.getElementById('pr-items-container').children.length === 0;
+        if (firstRow) addEmptyItemRow();
+        updateTotalItemsCount();
         if (!window.AkraPR.can(window.appSession, 'viewPR')) {
             if (measure) PrPerf.fail('permission');
             appData.products = [];
-            renderHistoryFromServer([]);
-            hideDataLoading();
-            showNotification('ไม่มีสิทธิ์ดูสินค้าและประวัติ PR กรุณาตรวจสิทธิ์ใน BUYMORETH', 'warning');
+            showPRReadError('products', { reason: 'permission_denied' });
+            showPRReadError('history', { reason: 'permission_denied' });
             return;
+        }
+        if (firstRow) {
+            const savedWarehouse = getCache('pr_warehouse_pref', 365 * 24 * 60 * 60 * 1000);
+            if (savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
         }
         // [CACHE FIRST METHOD] โหลดข้อมูลเดิมมาแสดงก่อนทันที
         const cacheStarted = measure ? PrPerf.start('cache-read') : null;
@@ -641,45 +745,14 @@
             showDataLoading('เตรียมความพร้อมระบบ...');
         }
 
-        // ยิงหลังบ้านเบื้องหลังเพื่อดึงข้อมูลใหม่
-        const [initRes, histRes] = await Promise.all([
-            measure ? PrPerf.read('api-products', () => apiCall('getProducts'), 'products') : apiCall('getProducts'),
-            measure ? PrPerf.read('api-history', () => apiCall('getPRHistory'), 'history') : apiCall('getPRHistory')
-        ]);
-        
-        if (!cachedInit || !cachedHist || isManualRefresh) hideDataLoading();
-
-        if (initRes.success) {
-            const productsStarted = measure ? PrPerf.start('products-render') : null;
-            if (measure) { renderStage = 'products-render'; renderStarted = productsStarted; }
-            setCache('CACHE_PR_INIT_DATA', { products: initRes.products || [] });
-            appData.products = initRes.products || [];
-            
-            // วาดแถวเปล่าเฉพาะตอนที่เข้าแอปครั้งแรกและไม่ได้ดึง Cache (กันไม่ให้ไปล้างข้อมูลที่ User กำลังพิมพ์)
-            if (document.getElementById('pr-items-container').children.length === 0) {
-                const savedWarehouse = getCache('pr_warehouse_pref', 365 * 24 * 60 * 60 * 1000);
-                if(savedWarehouse) document.getElementById('pr-warehouse').value = savedWarehouse;
-                document.getElementById('pr-items-container').innerHTML = '';
-                addEmptyItemRow();
-            }
-            if (measure) { PrPerf.end('products-render', productsStarted); PrPerf.productsApplied(); renderStage = null; }
-        }
-        
-        if (histRes.success) {
-            const historyStarted = measure ? PrPerf.start('history-render') : null;
-            if (measure) { renderStage = 'history-render'; renderStarted = historyStarted; }
-            setCache('CACHE_PR_HIST_DATA', histRes);
-            renderHistoryFromServer(histRes.history);
-            freshHistoryApplied = true;
-            if (measure) { PrPerf.end('history-render', historyStarted); renderStage = null; }
-        }
-        if (!initRes.success || !histRes.success) showNotification('โหลดข้อมูลบางส่วนไม่สำเร็จ กรุณารีเฟรชเพื่อลองอีกครั้ง', 'error');
+        // Each region settles independently; read retries never replace form rows.
+        const [, historyApplied] = await Promise.all([readPRResource('products', measure, true), readPRResource('history', measure, true)]);
+        freshHistoryApplied = historyApplied;
       } catch (error) {
-        if (measure) { if (renderStage) { PrPerf.end(renderStage, renderStarted, 'error'); PrPerf.fail(renderStage); } PrPerf.fail('data-load'); }
-        console.error('PR data load error:', error);
-        showNotification('โหลดข้อมูลไม่สำเร็จ กรุณารีเฟรชเพื่อลองอีกครั้ง', 'error');
+        if (measure) PrPerf.fail('data-load');
+        showPRReadError('products', { errorName: error.name });
       } finally {
-        hideDataLoading();
+        if (!prReadState.products.pending && !prSubmitPending) hideDataLoading();
         if (measure && freshHistoryApplied) PrPerf.mark('freshHistorySettledMs');
       }
     }
@@ -850,6 +923,7 @@
             </button>
         `;
         container.appendChild(div);
+        if (!window.AkraPR.can(window.appSession, 'createPR')) div.querySelectorAll('input, button').forEach(control => { control.disabled = true; });
         setupProductAutocomplete(div.querySelector('.p-product-input'));
         updateTotalItemsCount();
         lucide.createIcons({ root: div });
@@ -944,9 +1018,11 @@
         if(itemsToSubmit.length === 0) return showNotification("กรุณาระบุสินค้าที่ต้องการอย่างน้อย 1 รายการ", "warning");
 
         const btn = document.getElementById('btn-submit-pr');
-        const formControls = Array.from(document.querySelectorAll('#form-pr input, #form-pr select, #form-pr button')).map(control => [control, control.disabled]);
+        const formControls = Array.from(document.querySelectorAll('#form-pr input, #form-pr select, #form-pr button'))
+            .filter(control => !['pr-products-retry', 'pr-history-retry'].includes(control.id)).map(control => [control, control.disabled]);
         formControls.forEach(([control]) => { control.disabled = true; });
         btn.disabled = true;
+        prSubmitPending = true;
         showDataLoading('กำลังส่งคำขอสั่งซื้อ...');
 
         const payload = { requester, warehouse, items: itemsToSubmit };
@@ -954,6 +1030,7 @@
         try { res = await apiCall('createPR', payload); }
         catch (_) { res = {success: false, pending: true, message: 'ยังยืนยันผลบันทึกไม่ได้ กรุณาส่งซ้ำด้วยข้อมูลเดิม'}; }
         finally {
+            prSubmitPending = false;
             formControls.forEach(([control, disabled]) => { control.disabled = disabled; });
             btn.disabled = false;
             hideDataLoading();
@@ -970,12 +1047,7 @@
             window.scrollTo(0, 0);
 
             // ปล่อยให้ประวัติดึงข้อมูลแบบ Background
-            apiCall('getPRHistory').then(histRes => {
-                if(histRes.success) {
-                    setCache('CACHE_PR_HIST_DATA', histRes);
-                    renderHistoryFromServer(histRes.history);
-                }
-            });
+            readPRResource('history', false, true);
             
         } else {
             document.getElementById('pr-restore-pending').hidden = !res.pending;

@@ -11,7 +11,7 @@ function slice(start, end) {
   return html.slice(from, to);
 }
 const helper = slice('    var PrPerf = (function () {', '    async function checkAppVersion(');
-const loader = slice('    async function loadInitialData(', '    function renderHistoryFromServer(');
+const loader = slice('    var prReadState = ', '    function renderHistoryFromServer(');
 const auth = slice('    var AuthGuard = {', "    document.addEventListener('DOMContentLoaded'");
 
 function fixture({ search = '?akra_perf=1', productsCache = false, historyCache = false, permitted = true, editable = true, preview = false } = {}) {
@@ -20,15 +20,18 @@ function fixture({ search = '?akra_perf=1', productsCache = false, historyCache 
   const requests = [], rendered = [], pending = new Map(), nodes = new Map();
   function element(hidden = false) {
     const classes = new Set(hidden ? ['hidden'] : []);
-    return { children: [], value: '', disabled: false, innerHTML: '',
+    return { children: [], value: '', disabled: false, hidden: false, innerHTML: '',
       classList: { contains: name => classes.has(name), add: name => classes.add(name), remove: name => classes.delete(name) },
       setAttribute() {} };
   }
   nodes.set('app-content', element(true)); nodes.set('data-loader', element(true));
   nodes.set('pr-items-container', element()); nodes.set('pr-warehouse', element()); nodes.set('pr-history-container', element());
+  for (const kind of ['products', 'history']) for (const part of ['status', 'retry', 'error', 'error-title', 'error-message']) {
+    const node = element(); node.hidden = true; nodes.set(`pr-${kind}-${part}`, node);
+  }
   const context = {
     CURRENT_VERSION: 'fixture-version', URLSearchParams, TextEncoder,
-    console: { error() {} }, appData: { products: [] }, PR_CACHE_TTL: 1000, prSessionToken: '',
+    console: { error() {} }, navigator: { onLine: true }, appData: { products: [] }, PR_CACHE_TTL: 1000, prSessionToken: '',
     window: { location: { search }, performance: { now: () => { clockReads++; return now; } },
       AkraModule: { embedded: true, isLocalPreview: () => preview, verifySession: async () => ({ id: 'private-actor', name: 'private-name', identityId: 'private-identity' }), watchSession: options => { invalidateSession = options.invalidated; } },
       AkraPR: { can: (_user, action) => action === 'viewPR' ? permitted : editable } },
@@ -49,6 +52,7 @@ function fixture({ search = '?akra_perf=1', productsCache = false, historyCache 
     showDataLoading: () => nodes.get('data-loader').classList.remove('hidden'),
     hideDataLoading: () => nodes.get('data-loader').classList.add('hidden'),
     addEmptyItemRow: () => nodes.get('pr-items-container').children.push({ value: 'draft-preserved' }),
+    updateTotalItemsCount() {},
     renderHistoryFromServer: history => { rendered.push(history); now += 3; },
     showNotification() {}, checkAppVersion: async () => true, AppVersionGuard: { start() {} }, lucide: { createIcons() {} },
     UI: { showLoading() {}, showApp() { nodes.get('app-content').classList.remove('hidden'); }, showError() { nodes.get('app-content').classList.add('hidden'); } },
@@ -95,6 +99,7 @@ test('fresh markers reflect both actual responses, applied history and restored 
   assert.doesNotMatch(JSON.stringify(data), /private-|https:|กล่อง/);
   const frozen = JSON.stringify(data);
   const refresh = f.context.loadInitialData(true);
+  await flush(); // The independent read helpers enqueue their transport operations.
   f.setNow(900); f.pending.get('getProducts').resolve(products); f.pending.get('getPRHistory').resolve(history); await refresh;
   assert.equal(JSON.stringify(f.result()), frozen, 'manual refresh leaves the startup snapshot frozen');
   assert.equal(f.nodes.get('pr-items-container').children.length, 1, 'existing draft rows retained');
@@ -129,9 +134,19 @@ test('failed read or denied view never invents fresh readiness; errors remain co
 
 test('rejected read, render error, invalid auth and disabled form remain excluded from usable cohorts', async () => {
   const rejected = fixture(); const { running } = await start(rejected);
+  assert.deepEqual(rejected.requests, ['getProducts', 'getPRHistory']);
   rejected.pending.get('getProducts').reject(new Error('private-token private-url'));
   rejected.pending.get('getPRHistory').resolve(history); await running;
-  assert.equal(rejected.result().ready.freshFormProductUsableMs, null); assert.equal(rejected.result().ready.freshHistorySettledMs, null);
+  assert.equal(rejected.result().ready.freshFormProductUsableMs, null);
+  // Independent read regions keep successful history usable when products fail;
+  // failed products must never enter the usable form cohort or replace data.
+  assert.notEqual(rejected.result().ready.freshHistorySettledMs, null);
+  assert.equal(rejected.context.appData.products.length, 0);
+  assert.equal(rejected.nodes.get('pr-products-error').hidden, false);
+  assert.equal(rejected.nodes.get('pr-history-error').hidden, true);
+  assert.equal(rejected.rendered.length, 1);
+  assert.equal(rejected.result().requestCount, 2);
+  assert.equal(rejected.result().status, 'error');
   assert.deepEqual(rejected.result().errors, ['api-products', 'data-load']);
   const rendered = fixture(); rendered.context.renderHistoryFromServer = () => { throw new Error('private-record'); };
   const renderRun = await start(rendered); rendered.pending.get('getProducts').resolve(products); rendered.pending.get('getPRHistory').resolve(history); await renderRun.running;

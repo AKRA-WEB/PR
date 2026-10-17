@@ -112,3 +112,19 @@ test('PR actual pending restoration cannot cross identity or replace current for
  assert.deepEqual(dom.counts(),{dirty:1,confirmations:2,clears:1});
  assert.equal(r.requests.length,1,'identity checks and confirmation never submit');
 });
+
+test('PR read failures retain HTTP status and transport metadata without changing pending mutation results',async()=>{
+ const storage={getItem:()=>null,setItem:()=>{},removeItem:()=>{}};
+ const options={storage,getUserId:()=> 'fixture',getIdentityId:()=> '10000000-0000-4000-8000-000000000001',getToken:()=> 'fixture-token'};
+ for(const status of [401,403,500]){
+  const reason=status===401?'invalid_or_expired_token':status===403?'permission_denied':'pr_service_unavailable';
+  const client=create({...options,fetch:async()=>({ok:false,status,json:async()=>({success:false,reason})})});
+  const result=await client.call('getProducts');assert.equal(result.status,status);assert.equal(result.reason,reason);assert.equal(result.pending,false);
+ }
+ const cause={code:'synthetic-transport'};
+ const client=create({...options,fetch:async()=>{throw Object.assign(new TypeError('network lost'),{cause});}});
+ const failed=await client.call('getPRHistory');assert.equal(failed.errorName,'TypeError');assert.equal(failed.reason,'network lost');assert.equal(failed.cause,cause);
+ const write=fixture();const pending=await write.client.call('createPR',data);
+ assert.equal(Object.hasOwn(pending,'errorName'),false);assert.equal(Object.hasOwn(pending,'status'),false);
+ assert.equal(pending.pending,true);assert.deepEqual(write.client.pending().data,data);
+});

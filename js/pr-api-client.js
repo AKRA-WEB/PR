@@ -51,6 +51,8 @@
         }
         async function call(action,data=null){
             let draft=null,key='';
+            const isRead=['getInitialData','getProducts','getPRHistory'].includes(action);
+            let responseStatus;
             try{
                 const owner=ownerId();
                 const token=options.getToken();
@@ -68,19 +70,20 @@
                     method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},cache:'no-store',signal:AbortSignal.timeout(20000),
                     body:JSON.stringify({action,token,data:draft?draft.data:data,...(draft?{clientRequestId:draft.clientRequestId}:{})})
                 });
+                responseStatus=response.status;
                 const result=await response.json();
                 if(owner!==options.getIdentityId?.() || !options.getToken())throw new Error('session_changed');
                 if(!response.ok || result.success!==true){
                     const reason=String(result.reason||'pr_service_unavailable');
                     // A validation rejection is known to have rolled back, so correction is safe.
                     if(draft && response.status===400 && reason.startsWith('invalid_pr_'))storage.removeItem(key);
-                    return{success:false,reason,message:message(reason),pending:!!draft};
+                    return{success:false,reason,message:message(reason),pending:!!draft,...(isRead?{status:responseStatus}:{})};
                 }
                 if(draft){try{if(JSON.parse(storage.getItem(key)||'null')?.clientRequestId===draft.clientRequestId)storage.removeItem(key);}catch(_){/* Confirmed save remains confirmed; retained ID can replay safely. */}}
                 return result;
             }catch(error){
                 const reason=String(error?.message || 'pr_service_unavailable');
-                return{success:false,reason,message:message(reason),pending:!!draft};
+                return{success:false,reason,message:message(reason),pending:!!draft,...(isRead?{status:responseStatus,errorName:error?.name,...(error?.cause===undefined?{}:{cause:error.cause})}:{})};
             }
         }
         return Object.freeze({call,pending,storageKey});
